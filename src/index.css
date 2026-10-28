@@ -1,37 +1,50 @@
 * {
   box-sizing: border-box;
-}
-
-body {
   margin: 0;
   padding: 0;
-  background-color: #ffffff;
-  color: #111111;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-/* Видимый тёмный текст на всех белых кнопках тем, селектах и полях ввода */
-.sidebar-categories button,
-.sidebar-cat-btn,
-.post-category-tag,
-.filter-select,
-.filter-select option,
-.date-input,
-.page-number-input,
-select,
-option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-  font-weight: 600;
 }
 
-.sidebar-categories button.active,
-.sidebar-cat-btn.active,
-.post-category-tag.active {
-  background-color: #f97316 !important;
-  color: #ffffff !important;
-  border-color: #ea580c !important;
+:root,
+html,
+body {
+  background-color: #ffffff;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: #ffffff;
+  color: #111827;
+}
+
+button,
+input,
+select,
+textarea,
+option {
+  font-family: inherit;
+  color: #111827;
+}
+
+select,
+option,
+input[type="date"],
+input[type="number"] {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
 }

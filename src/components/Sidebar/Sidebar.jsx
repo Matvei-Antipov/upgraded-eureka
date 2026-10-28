@@ -4,6 +4,8 @@ import {
   fetchCategories,
   setCategoryId,
   setViewMode,
+  setSortBy,
+  setOrder,
   closePostPage,
 } from '../../store/postsSlice';
 import { closeProfilePage } from '../../store/authSlice';
@@ -12,128 +14,152 @@ import './Sidebar.css';
 
 const Sidebar = () => {
   const dispatch = useDispatch();
-  const language = useSelector((state) => state.auth.language);
-  const categories = useSelector((state) => state.posts.categories);
-  const selectedCategoryId = useSelector((state) => state.posts.categoryId);
-  const viewMode = useSelector((state) => state.posts.viewMode);
-  const savedPosts = useSelector((state) => state.posts.savedPosts);
-
+  const { categories, categoryId, viewMode, sortBy } = useSelector(
+    (state) => state.posts
+  );
+  const { language } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
-  const savedCount = Object.keys(savedPosts || {}).length;
 
   useEffect(() => {
     dispatch(fetchCategories());
   }, [dispatch]);
 
-  const handleSectionClick = (mode) => {
+  const handleNavClick = (mode) => {
     dispatch(closeProfilePage());
     dispatch(closePostPage());
-    dispatch(setCategoryId(null));
-    dispatch(setViewMode(mode));
+    if (mode === 'all' || mode === 'new') {
+      dispatch(setViewMode(mode));
+      dispatch(setSortBy('date'));
+      dispatch(setOrder('DESC'));
+    } else if (mode === 'popular') {
+      dispatch(setViewMode('popular'));
+      dispatch(setSortBy('likes'));
+      dispatch(setOrder('DESC'));
+    } else {
+      dispatch(setViewMode(mode));
+    }
   };
 
-  const handleTopicClick = (catId) => {
+  const handleCategoryClick = (id) => {
     dispatch(closeProfilePage());
     dispatch(closePostPage());
-    dispatch(setCategoryId(catId));
+    if (id !== null && Number(categoryId) === Number(id)) {
+      dispatch(setCategoryId(null));
+    } else {
+      dispatch(setCategoryId(id));
+    }
   };
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-section">
-        <h3 className="sidebar-heading">{t.sectionsHeading}</h3>
-        <nav className="sidebar-nav">
-          <button
-            type="button"
-            className={`sidebar-item ${
-              selectedCategoryId === null && viewMode === 'all' ? 'active' : ''
-            }`}
-            onClick={() => handleSectionClick('all')}
-          >
-            <span className="sidebar-icon">❖</span>
-            <span>{t.allQuestions}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sidebar-item ${
-              viewMode === 'popular' ? 'active' : ''
-            }`}
-            onClick={() => handleSectionClick('popular')}
-          >
-            <span className="sidebar-icon">↗</span>
-            <span>{t.popular}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sidebar-item ${viewMode === 'new' ? 'active' : ''}`}
-            onClick={() => handleSectionClick('new')}
-          >
-            <span className="sidebar-icon">🕒</span>
-            <span>{t.newest}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sidebar-item ${viewMode === 'saved' ? 'active' : ''}`}
-            onClick={() => handleSectionClick('saved')}
-          >
-            <span className="sidebar-icon">🔖</span>
-            <span>{t.saved}</span>
-            {savedCount > 0 && (
-              <span className="sidebar-badge">{savedCount}</span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            className={`sidebar-item ${viewMode === 'stats' ? 'active' : ''}`}
-            onClick={() => handleSectionClick('stats')}
-          >
-            <span className="sidebar-icon">📊</span>
-            <span>{t.statistics}</span>
-          </button>
-        </nav>
+      <div className="sidebar-block">
+        <h3 className="sidebar-heading">{t.navSection}</h3>
+        <ul className="sidebar-nav">
+          <li>
+            <button
+              type="button"
+              className={`sidebar-item ${
+                viewMode === 'all' && sortBy === 'date' && !categoryId
+                  ? 'active'
+                  : ''
+              }`}
+              onClick={() => {
+                dispatch(setCategoryId(null));
+                handleNavClick('all');
+              }}
+            >
+              <span className="sidebar-icon">❖</span>
+              <span className="sidebar-text">{t.navMain}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className={`sidebar-item ${
+                sortBy === 'likes' &&
+                viewMode !== 'saved' &&
+                viewMode !== 'stats'
+                  ? 'active'
+                  : ''
+              }`}
+              onClick={() => handleNavClick('popular')}
+            >
+              <span className="sidebar-icon">↗</span>
+              <span className="sidebar-text">{t.navPopular}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className={`sidebar-item ${viewMode === 'new' ? 'active' : ''}`}
+              onClick={() => handleNavClick('new')}
+            >
+              <span className="sidebar-icon">🕒</span>
+              <span className="sidebar-text">{t.navNew}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className={`sidebar-item ${viewMode === 'saved' ? 'active' : ''}`}
+              onClick={() => handleNavClick('saved')}
+            >
+              <span className="sidebar-icon">🔖</span>
+              <span className="sidebar-text">{t.navSaved}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className={`sidebar-item ${viewMode === 'stats' ? 'active' : ''}`}
+              onClick={() => handleNavClick('stats')}
+            >
+              <span className="sidebar-icon">📊</span>
+              <span className="sidebar-text">{t.navStats}</span>
+            </button>
+          </li>
+        </ul>
       </div>
 
       <div className="sidebar-divider" />
 
-      <div className="sidebar-section">
-        <h3 className="sidebar-heading">{t.topicsHeading}</h3>
-        <nav className="sidebar-topics">
-          <button
-            type="button"
-            className={`topic-item ${
-              selectedCategoryId === null &&
-              viewMode !== 'saved' &&
-              viewMode !== 'stats'
-                ? 'active'
-                : ''
-            }`}
-            onClick={() => handleTopicClick(null)}
-          >
-            <span className="topic-item-title">{t.allTopics}</span>
-            <span className="topic-item-desc">{t.allTopicsDesc}</span>
-          </button>
-
-          {categories.map((cat) => (
+      <div className="sidebar-block">
+        <h3 className="sidebar-heading">{t.categoriesSection}</h3>
+        <ul className="sidebar-categories">
+          <li>
             <button
-              key={cat.id}
               type="button"
-              className={`topic-item ${
-                Number(selectedCategoryId) === Number(cat.id) ? 'active' : ''
+              className={`sidebar-cat-btn ${
+                categoryId === null ? 'active' : ''
               }`}
-              onClick={() => handleTopicClick(cat.id)}
-              title={cat.description || cat.title}
+              onClick={() => handleCategoryClick(null)}
             >
-              <span className="topic-item-title">{cat.title || cat.name}</span>
-              {cat.description && (
-                <span className="topic-item-desc">{cat.description}</span>
-              )}
+              <span className="category-name">{t.allCategories}</span>
             </button>
-          ))}
-        </nav>
+          </li>
+          {categories.length === 0 ? (
+            <li className="sidebar-empty">{t.noCategories}</li>
+          ) : (
+            categories.map((cat) => (
+              <li key={cat.id}>
+                <button
+                  type="button"
+                  className={`sidebar-cat-btn ${
+                    Number(categoryId) === Number(cat.id) ? 'active' : ''
+                  }`}
+                  onClick={() => handleCategoryClick(Number(cat.id))}
+                >
+                  <span className="category-name">
+                    {cat.title || cat.name}
+                  </span>
+                  {cat.description && (
+                    <span className="category-desc">{cat.description}</span>
+                  )}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
       </div>
     </aside>
   );
