@@ -96,6 +96,7 @@ const PostFeed = () => {
     posts.forEach((post) => {
       const aid = post.author_id || post.user_id;
       if (aid && !usersMap[aid] && !requestedUserIdsRef.current.has(aid)) {
+        requestedUserIdsRef.current.has(aid);
         requestedUserIdsRef.current.add(aid);
         dispatch(fetchUserById(aid));
       }
@@ -130,7 +131,6 @@ const PostFeed = () => {
     }
   }, [paginationMode, categoryId, viewMode, sortBy, order]);
 
-  // Завантажуємо категорії, лайки та коментарі для всіх постів
   useEffect(() => {
     posts.forEach((post) => {
       if (
@@ -331,7 +331,6 @@ const PostFeed = () => {
         return false;
       }
 
-      // Сувора фільтрація за обраною категорією
       if (categoryId && viewMode !== 'saved') {
         const postCats =
           previewCategoriesByPost[post.id] !== undefined
@@ -363,7 +362,6 @@ const PostFeed = () => {
         if (!matchesCat) return false;
       }
 
-      // Фільтрація за датою публікації (Від — До)
       if ((startDate || endDate) && viewMode !== 'saved') {
         const rawDate =
           post.publish_date ||
@@ -411,7 +409,6 @@ const PostFeed = () => {
     };
 
     const sorted = [...filtered].sort((a, b) => {
-      // 1. Сортування за датою додавання (DESC = найновіші перші, ASC = найстаріші перші)
       if (sortBy === 'date') {
         const timeA = getPostTimestamp(a);
         const timeB = getPostTimestamp(b);
@@ -423,7 +420,6 @@ const PostFeed = () => {
           : Number(b.id || 0) - Number(a.id || 0);
       }
 
-      // 2. Сортування за кількістю вподобайок (DESC = спадна, ASC = висхідна)
       const scoreA = getPostEffectiveScore(a);
       const scoreB = getPostEffectiveScore(b);
       if (scoreA !== scoreB) {
@@ -683,12 +679,21 @@ const PostFeed = () => {
                 : ''
             }`}
             onClick={() => {
-              dispatch(setViewMode('all'));
-              dispatch(setSortBy('date'));
-              dispatch(setOrder('DESC'));
+              if (sortBy === 'date' && viewMode !== 'unanswered') {
+                dispatch(setOrder(order === 'DESC' ? 'ASC' : 'DESC'));
+              } else {
+                dispatch(setViewMode('all'));
+                dispatch(setSortBy('date'));
+                dispatch(setOrder('DESC'));
+              }
             }}
           >
-            {t.tabAll}
+            {t.tabAll}{' '}
+            {sortBy === 'date' && viewMode !== 'unanswered'
+              ? order === 'DESC'
+                ? '↓'
+                : '↑'
+              : ''}
           </button>
           <button
             type="button"
@@ -752,7 +757,7 @@ const PostFeed = () => {
               className="filter-select"
             >
               <option value="date">{t.sortByDate}</option>
-              <option value="likes">{t.sortByLikes}</option>
+              <option value="likes">{t.sortByLikesOption || t.tabPopular}</option>
             </select>
           </label>
 
@@ -949,19 +954,39 @@ const PostFeed = () => {
 
                   {postCategories.length > 0 && (
                     <div className="post-categories">
-                      {postCategories.map((cat, idx) => (
-                        <span
-                          key={cat.id || idx}
-                          className="post-category-tag"
-                          style={{ cursor: 'pointer' }}
-                          title={cat.description || cat.title}
-                          onClick={() => {
-                            if (cat.id) dispatch(setCategoryId(cat.id));
-                          }}
-                        >
-                          {typeof cat === 'string' ? cat : cat.title}
-                        </span>
-                      ))}
+                      {postCategories.map((cat, idx) => {
+                        const catObj =
+                          typeof cat === 'object' && cat !== null
+                            ? cat
+                            : categories.find(
+                                (c) =>
+                                  Number(c.id) === Number(cat) ||
+                                  c.title === cat
+                              ) || { id: idx, title: String(cat) };
+                        const isCatSelected =
+                          categoryId &&
+                          Number(catObj.id) === Number(categoryId);
+                        return (
+                          <span
+                            key={catObj.id || idx}
+                            className={`post-category-tag ${
+                              isCatSelected ? 'active' : ''
+                            }`}
+                            title={catObj.description || catObj.title}
+                            onClick={() => {
+                              if (catObj.id) {
+                                dispatch(
+                                  setCategoryId(
+                                    isCatSelected ? null : Number(catObj.id)
+                                  )
+                                );
+                              }
+                            }}
+                          >
+                            {catObj.title || catObj.name}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
 

@@ -102,8 +102,6 @@ export const fetchPosts = createAsyncThunk(
     const { sortBy, order, statusFilter } = getState().posts;
     const { user, token } = getState().auth;
 
-    // Завантажуємо повний список постів, щоб клієнтське сортування (за датою/вподобайками)
-    // та фільтрація (за категорією/періодом) працювали точно по всій базі даних
     const params = {
       page: 1,
       limit: 100,
@@ -677,7 +675,7 @@ export const updateExistingPost = createAsyncThunk(
           { headers }
         );
       } catch {
-        // Сохранено в usof_post_overrides
+        // Saved in usof_post_overrides
       }
     }
 
@@ -709,7 +707,7 @@ export const deleteExistingPost = createAsyncThunk(
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`/api/posts/${postId}`, { headers });
     } catch {
-      // Удаление зафиксировано в usof_deleted_posts
+      // Saved in usof_deleted_posts
     }
     return postId;
   }
@@ -801,7 +799,7 @@ export const updateComment = createAsyncThunk(
           { headers }
         );
       } catch {
-        // Сохранено в usof_comment_overrides
+        // Saved in usof_comment_overrides
       }
     }
 
@@ -833,7 +831,7 @@ export const deleteComment = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch {
-      // Удаление зафиксировано в usof_deleted_comments
+      // Saved in usof_deleted_comments
     }
 
     return { postId, commentId };
@@ -952,7 +950,7 @@ const postsSlice = createSlice({
     limit: 10,
     totalPages: 1,
     paginationMode: 'pages',
-    // За замовчуванням на головній сторінці: спадна дата додавання (найновіші перші)
+    // Пункт 1 PDF: по умолчанию посты отсортированы по убывающей дате добавления
     sortBy: 'date',
     order: 'DESC',
     categoryId: null,
@@ -1261,7 +1259,6 @@ const postsSlice = createSlice({
           action.payload;
         state.previewCommentsByPost[postId] = comments;
 
-        // Завжди зберігаємо масив категорій (навіть порожній), щоб фільтрація за категорією працювала чітко
         if (state.categoryOverrides[postId]) {
           state.previewCategoriesByPost[postId] =
             state.categoryOverrides[postId];

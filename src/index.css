@@ -12,3 +12,26 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* Видимый тёмный текст на всех белых кнопках тем, селектах и полях ввода */
+.sidebar-categories button,
+.sidebar-cat-btn,
+.post-category-tag,
+.filter-select,
+.filter-select option,
+.date-input,
+.page-number-input,
+select,
+option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 600;
+}
+
+.sidebar-categories button.active,
+.sidebar-cat-btn.active,
+.post-category-tag.active {
+  background-color: #f97316 !important;
+  color: #ffffff !important;
+  border-color: #ea580c !important;
+}

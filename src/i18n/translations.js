@@ -23,14 +23,14 @@ export const translations = {
 
     communityQuestions: 'Питання спільноти',
     communitySubtitle:
-      'Відсортовано за датою додавання або кількістю вподобайок',
+      'Відсортовано за спадною датою додавання або за кількістю вподобайок',
     savedQuestionsTitle: 'Збережені питання',
     savedSubtitle: 'Ваша особиста добірка закладок для швидкого доступу',
     selectedCategoryPrefix: 'Тема:',
     resetCategoryBtn: '✕ Скинути фільтр теми',
     askQuestionBtn: 'Поставити питання',
 
-    tabAll: 'За датою (новіші)',
+    tabAll: 'За датою',
     tabUnanswered: 'Без відповідей',
     tabPopular: 'За вподобайками',
     tabSaved: 'Збережені',
@@ -39,7 +39,7 @@ export const translations = {
     allCategoriesOption: 'Усі категорії',
     sortByLabel: 'Сортування:',
     sortByDate: 'За датою додавання',
-    sortByLikes: 'За вподобайками (лайками)',
+    sortByLikesOption: 'За вподобайками (лайками)',
     statusLabel: 'Статус:',
     statusActive: 'Активні',
     statusInactive: 'Неактивні (Приховані)',
@@ -191,7 +191,7 @@ export const translations = {
     resetCategoryBtn: '✕ Clear topic filter',
     askQuestionBtn: 'Ask Question',
 
-    tabAll: 'By Date (Newest)',
+    tabAll: 'By Date',
     tabUnanswered: 'Unanswered',
     tabPopular: 'By Likes',
     tabSaved: 'Saved',
@@ -200,7 +200,7 @@ export const translations = {
     allCategoriesOption: 'All categories',
     sortByLabel: 'Sort by:',
     sortByDate: 'Date added',
-    sortByLikes: 'Number of likes',
+    sortByLikesOption: 'Number of likes',
     statusLabel: 'Status:',
     statusActive: 'Active',
     statusInactive: 'Inactive (Hidden)',
