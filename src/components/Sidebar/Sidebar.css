@@ -1,0 +1,187 @@
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+
+.sidebar-section {
+  margin-bottom: 24px;
+}
+
+.sidebar-heading {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 12px 12px;
+}
+
+.sidebar-nav,
+.sidebar-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-item:hover {
+  background-color: #f9fafb;
+  color: #111111;
+}
+
+.sidebar-item.active {
+  background-color: #f3f4f6;
+  color: #111111;
+  font-weight: 500;
+}
+
+.sidebar-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+
+.sidebar-badge {
+  margin-left: auto;
+  background-color: #e5e7eb;
+  color: #111111;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.sidebar-divider {
+  height: 1px;
+  background-color: #eaeaea;
+  margin: 20px 12px;
+}
+
+.topic-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.topic-item:hover {
+  color: #111111;
+  background-color: #f9fafb;
+}
+
+.topic-item.active {
+  color: #111111;
+  font-weight: 600;
+  background-color: #f3f4f6;
+}
+
+.topic-item-title {
+  font-size: 14px;
+  color: inherit;
+}
+
+.topic-item-desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Планшеты и телефоны */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 100%;
+    border-bottom: 1px solid #eaeaea;
+    padding-top: 0;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+  }
+
+  .sidebar-section {
+    margin-bottom: 12px;
+  }
+
+  .sidebar-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .sidebar-heading {
+    margin: 0 0 8px 4px;
+  }
+
+  .sidebar-divider {
+    margin: 12px 0;
+  }
+
+  .sidebar-nav,
+  .sidebar-topics {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar,
+  .sidebar-topics::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-item,
+  .topic-item {
+    width: auto;
+    flex-shrink: 0;
+    padding: 7px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .sidebar-item.active,
+  .topic-item.active {
+    border-color: #111111;
+    background-color: #111111;
+    color: #ffffff;
+  }
+
+  .sidebar-badge {
+    margin-left: 6px;
+  }
+
+  .topic-item-desc {
+    display: none;
+  }
+}

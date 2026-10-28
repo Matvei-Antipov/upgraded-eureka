@@ -1,0 +1,93 @@
+.auth-modal-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.14);
+  box-sizing: border-box;
+}
+
+.auth-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px 0;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+}
+
+.auth-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 0;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auth-tab.active {
+  color: #111111;
+  font-weight: 600;
+  border-bottom-color: #111111;
+}
+
+.auth-form {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-server-error {
+  padding: 10px 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.auth-submit-btn {
+  background-color: #111111;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  background-color: #27272a;
+}
+
+.auth-secondary-link {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #6b7280;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .auth-modal-header {
+    padding: 12px 16px 0;
+  }
+
+  .auth-form {
+    padding: 16px;
+  }
+}
