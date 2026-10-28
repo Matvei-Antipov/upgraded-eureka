@@ -12,6 +12,7 @@ import {
   openAskModal,
   openPostPage,
   setViewMode,
+  setSortBy,
   setCategoryId,
   setOrder,
   setStatusFilter,
@@ -52,7 +53,6 @@ const PostFeed = () => {
     error,
     page,
     limit,
-    totalPages,
     paginationMode,
     sortBy,
     order,
@@ -93,7 +93,7 @@ const PostFeed = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    posts.slice(0, 15).forEach((post) => {
+    posts.forEach((post) => {
       const aid = post.author_id || post.user_id;
       if (aid && !usersMap[aid] && !requestedUserIdsRef.current.has(aid)) {
         requestedUserIdsRef.current.add(aid);
@@ -117,35 +117,31 @@ const PostFeed = () => {
   }, [dispatch, posts, previewCommentsByPost, usersMap]);
 
   useEffect(() => {
-    const shouldAppend = paginationMode === 'infinite' && page > 1;
-    dispatch(fetchPosts(shouldAppend));
+    dispatch(fetchPosts(false));
+  }, [dispatch, statusFilter]);
+
+  useEffect(() => {
     setCustomPageInput(String(page));
-  }, [
-    dispatch,
-    page,
-    limit,
-    sortBy,
-    order,
-    categoryId,
-    statusFilter,
-    startDate,
-    endDate,
-    paginationMode,
-  ]);
+  }, [page]);
 
   useEffect(() => {
     if (paginationMode === 'infinite') {
       setInfiniteVisibleCount(3);
     }
-  }, [paginationMode, categoryId, viewMode]);
+  }, [paginationMode, categoryId, viewMode, sortBy, order]);
 
+  // Завантажуємо категорії, лайки та коментарі для всіх постів
   useEffect(() => {
-    posts.slice(0, 15).forEach((post) => {
-      if (post.id && previewCommentsByPost[post.id] === undefined) {
+    posts.forEach((post) => {
+      if (
+        post.id &&
+        (previewCommentsByPost[post.id] === undefined ||
+          previewCategoriesByPost[post.id] === undefined)
+      ) {
         dispatch(fetchPostPreviewComments(post.id));
       }
     });
-  }, [dispatch, posts, previewCommentsByPost]);
+  }, [dispatch, posts, previewCommentsByPost, previewCategoriesByPost]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -308,6 +304,11 @@ const PostFeed = () => {
     return map;
   }, [sourcePosts, isAdmin, getPostEffectiveScore, usersMap]);
 
+  const selectedCategoryObj = useMemo(
+    () => categories.find((c) => Number(c.id) === Number(categoryId)),
+    [categories, categoryId]
+  );
+
   const filteredPosts = useMemo(() => {
     const filtered = sourcePosts.filter((post) => {
       if (!isAdmin && post.status === 'inactive') {
@@ -330,20 +331,39 @@ const PostFeed = () => {
         return false;
       }
 
+      // Сувора фільтрація за обраною категорією
       if (categoryId && viewMode !== 'saved') {
         const postCats =
-          previewCategoriesByPost[post.id] ||
-          (Array.isArray(post.categories) ? post.categories : []);
-        if (postCats.length > 0) {
-          const matchesCat = postCats.some(
-            (cat) =>
-              Number(typeof cat === 'object' ? cat.id : cat) ===
-              Number(categoryId)
+          previewCategoriesByPost[post.id] !== undefined
+            ? previewCategoriesByPost[post.id]
+            : Array.isArray(post.categories)
+            ? post.categories
+            : [];
+
+        const targetCatTitle = (
+          selectedCategoryObj?.title ||
+          selectedCategoryObj?.name ||
+          ''
+        )
+          .trim()
+          .toLowerCase();
+
+        const matchesCat = postCats.some((cat) => {
+          if (typeof cat === 'object' && cat !== null) {
+            if (Number(cat.id) === Number(categoryId)) return true;
+            const cTitle = (cat.title || cat.name || '').trim().toLowerCase();
+            return Boolean(targetCatTitle && cTitle === targetCatTitle);
+          }
+          if (Number(cat) === Number(categoryId)) return true;
+          return Boolean(
+            targetCatTitle && String(cat).trim().toLowerCase() === targetCatTitle
           );
-          if (!matchesCat) return false;
-        }
+        });
+
+        if (!matchesCat) return false;
       }
 
+      // Фільтрація за датою публікації (Від — До)
       if ((startDate || endDate) && viewMode !== 'saved') {
         const rawDate =
           post.publish_date ||
@@ -383,27 +403,35 @@ const PostFeed = () => {
       return titleMatch || contentMatch;
     });
 
+    const getPostTimestamp = (p) => {
+      const raw =
+        p.publish_date || p.publishDate || p.created_at || p.createdAt;
+      const parsed = raw ? new Date(raw).getTime() : 0;
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'date' || viewMode === 'new') {
-        const timeA = new Date(
-          a.publish_date || a.publishDate || a.created_at || 0
-        ).getTime();
-        const timeB = new Date(
-          b.publish_date || b.publishDate || b.created_at || 0
-        ).getTime();
-        return order === 'ASC' ? timeA - timeB : timeB - timeA;
+      // 1. Сортування за датою додавання (DESC = найновіші перші, ASC = найстаріші перші)
+      if (sortBy === 'date') {
+        const timeA = getPostTimestamp(a);
+        const timeB = getPostTimestamp(b);
+        if (timeA !== timeB) {
+          return order === 'ASC' ? timeA - timeB : timeB - timeA;
+        }
+        return order === 'ASC'
+          ? Number(a.id || 0) - Number(b.id || 0)
+          : Number(b.id || 0) - Number(a.id || 0);
       }
+
+      // 2. Сортування за кількістю вподобайок (DESC = спадна, ASC = висхідна)
       const scoreA = getPostEffectiveScore(a);
       const scoreB = getPostEffectiveScore(b);
       if (scoreA !== scoreB) {
         return order === 'ASC' ? scoreA - scoreB : scoreB - scoreA;
       }
-      const timeA = new Date(
-        a.publish_date || a.publishDate || a.created_at || 0
-      ).getTime();
-      const timeB = new Date(
-        b.publish_date || b.publishDate || b.created_at || 0
-      ).getTime();
+
+      const timeA = getPostTimestamp(a);
+      const timeB = getPostTimestamp(b);
       return timeB - timeA;
     });
 
@@ -414,6 +442,7 @@ const PostFeed = () => {
     statusFilter,
     viewMode,
     categoryId,
+    selectedCategoryObj,
     previewCategoriesByPost,
     startDate,
     endDate,
@@ -424,27 +453,25 @@ const PostFeed = () => {
     getPostEffectiveScore,
   ]);
 
-  const displayedPosts =
-    paginationMode === 'infinite' && viewMode !== 'saved'
-      ? filteredPosts.slice(0, infiniteVisibleCount)
-      : filteredPosts;
+  const computedTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredPosts.length / limit)),
+    [filteredPosts.length, limit]
+  );
 
-  const handleLoadMoreClick = async () => {
+  const displayedPosts = useMemo(() => {
+    if (viewMode === 'saved') {
+      return filteredPosts;
+    }
+    if (paginationMode === 'infinite') {
+      return filteredPosts.slice(0, infiniteVisibleCount);
+    }
+    const startIndex = (page - 1) * limit;
+    return filteredPosts.slice(startIndex, startIndex + limit);
+  }, [filteredPosts, viewMode, paginationMode, infiniteVisibleCount, page, limit]);
+
+  const handleLoadMoreClick = () => {
     if (infiniteVisibleCount < filteredPosts.length) {
       setInfiniteVisibleCount((prev) => prev + 3);
-      return;
-    }
-
-    const prevCount = posts.length;
-    const nextPage = page + 1;
-    const res = await dispatch(fetchPosts(true));
-    const fetchedArr = Array.isArray(res.payload?.data)
-      ? res.payload.data
-      : res.payload?.data?.posts || [];
-
-    if (fetchedArr.length > 0 && posts.length > prevCount) {
-      dispatch(setPage(nextPage));
-      setInfiniteVisibleCount((prev) => prev + fetchedArr.length);
     } else {
       dispatch(showNotification({ message: t.allQuestionsLoadedToast }));
     }
@@ -574,10 +601,6 @@ const PostFeed = () => {
     }
   };
 
-  const selectedCategoryObj = categories.find(
-    (c) => Number(c.id) === Number(categoryId)
-  );
-
   const formatPublishDate = (dateValue) => {
     if (!dateValue) return t.justNow;
     const date = new Date(dateValue);
@@ -585,6 +608,7 @@ const PostFeed = () => {
     return date.toLocaleDateString(language === 'en' ? 'en-US' : 'uk-UA', {
       day: 'numeric',
       month: 'short',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -593,7 +617,7 @@ const PostFeed = () => {
   const handleGoToSpecificPage = (e) => {
     e.preventDefault();
     const num = parseInt(customPageInput, 10);
-    if (!Number.isNaN(num) && num >= 1) {
+    if (!Number.isNaN(num) && num >= 1 && num <= computedTotalPages) {
       dispatch(setPage(num));
     }
   };
@@ -652,11 +676,36 @@ const PostFeed = () => {
           <button
             type="button"
             className={`tab ${
-              viewMode === 'all' || viewMode === 'new' ? 'active' : ''
+              sortBy === 'date' &&
+              viewMode !== 'unanswered' &&
+              viewMode !== 'saved'
+                ? 'active'
+                : ''
             }`}
-            onClick={() => dispatch(setViewMode('all'))}
+            onClick={() => {
+              dispatch(setViewMode('all'));
+              dispatch(setSortBy('date'));
+              dispatch(setOrder('DESC'));
+            }}
           >
             {t.tabAll}
+          </button>
+          <button
+            type="button"
+            className={`tab ${
+              sortBy === 'likes' && viewMode !== 'saved' ? 'active' : ''
+            }`}
+            onClick={() => {
+              if (sortBy === 'likes') {
+                dispatch(setOrder(order === 'DESC' ? 'ASC' : 'DESC'));
+              } else {
+                dispatch(setSortBy('likes'));
+                dispatch(setOrder('DESC'));
+              }
+            }}
+          >
+            {t.tabPopular}{' '}
+            {sortBy === 'likes' ? (order === 'DESC' ? '↓' : '↑') : ''}
           </button>
           <button
             type="button"
@@ -664,13 +713,6 @@ const PostFeed = () => {
             onClick={() => dispatch(setViewMode('unanswered'))}
           >
             {t.tabUnanswered}
-          </button>
-          <button
-            type="button"
-            className={`tab ${viewMode === 'popular' ? 'active' : ''}`}
-            onClick={() => dispatch(setViewMode('popular'))}
-          >
-            {t.tabPopular}
           </button>
           <button
             type="button"
@@ -682,6 +724,54 @@ const PostFeed = () => {
         </div>
 
         <div className="feed-filters">
+          <label className="filter-label">
+            {t.categoryFilterLabel}
+            <select
+              value={categoryId || ''}
+              onChange={(e) =>
+                dispatch(
+                  setCategoryId(e.target.value ? Number(e.target.value) : null)
+                )
+              }
+              className="filter-select"
+            >
+              <option value="">{t.allCategoriesOption}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.title || cat.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="filter-label">
+            {t.sortByLabel}
+            <select
+              value={sortBy}
+              onChange={(e) => dispatch(setSortBy(e.target.value))}
+              className="filter-select"
+            >
+              <option value="date">{t.sortByDate}</option>
+              <option value="likes">{t.sortByLikes}</option>
+            </select>
+          </label>
+
+          <label className="filter-label">
+            {t.orderLabel}
+            <select
+              value={order}
+              onChange={(e) => dispatch(setOrder(e.target.value))}
+              className="filter-select"
+            >
+              <option value="DESC">
+                {sortBy === 'likes' ? t.orderDescLikes : t.orderDescDate}
+              </option>
+              <option value="ASC">
+                {sortBy === 'likes' ? t.orderAscLikes : t.orderAscDate}
+              </option>
+            </select>
+          </label>
+
           {isAdmin && (
             <label className="filter-label">
               {t.statusLabel}
@@ -695,18 +785,6 @@ const PostFeed = () => {
               </select>
             </label>
           )}
-
-          <label className="filter-label">
-            {t.orderLabel}
-            <select
-              value={order}
-              onChange={(e) => dispatch(setOrder(e.target.value))}
-              className="filter-select"
-            >
-              <option value="DESC">{t.orderDesc}</option>
-              <option value="ASC">{t.orderAsc}</option>
-            </select>
-          </label>
 
           <label className="filter-label">
             {t.perPageLabel}
@@ -758,7 +836,7 @@ const PostFeed = () => {
         </div>
       )}
 
-      {postStatus === 'loading' && page === 1 && viewMode !== 'saved' && (
+      {postStatus === 'loading' && posts.length === 0 && viewMode !== 'saved' && (
         <div className="feed-state-box">{t.loadingPosts}</div>
       )}
 
@@ -875,7 +953,11 @@ const PostFeed = () => {
                         <span
                           key={cat.id || idx}
                           className="post-category-tag"
+                          style={{ cursor: 'pointer' }}
                           title={cat.description || cat.title}
+                          onClick={() => {
+                            if (cat.id) dispatch(setCategoryId(cat.id));
+                          }}
                         >
                           {typeof cat === 'string' ? cat : cat.title}
                         </span>
@@ -1139,16 +1221,15 @@ const PostFeed = () => {
                 <input
                   type="number"
                   min={1}
+                  max={computedTotalPages}
                   value={customPageInput}
                   onChange={(e) => setCustomPageInput(e.target.value)}
                   className="page-number-input"
                   aria-label="Page number"
                 />
-                {totalPages > 1 && (
-                  <span className="page-indicator">
-                    {t.ofWord} {totalPages}
-                  </span>
-                )}
+                <span className="page-indicator">
+                  {t.ofWord} {computedTotalPages}
+                </span>
                 <button type="submit" className="page-go-btn">
                   {t.goBtn}
                 </button>
@@ -1157,12 +1238,7 @@ const PostFeed = () => {
               <button
                 type="button"
                 className="page-btn"
-                disabled={
-                  postStatus === 'loading' ||
-                  (totalPages > 1
-                    ? page >= totalPages
-                    : filteredPosts.length < limit)
-                }
+                disabled={postStatus === 'loading' || page >= computedTotalPages}
                 onClick={() => dispatch(setPage(page + 1))}
               >
                 {t.nextPage}

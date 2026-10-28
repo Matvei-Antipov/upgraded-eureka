@@ -26,7 +26,6 @@ const saveToStorage = (key, value) => {
   }
 };
 
-// Применяет сохраненные изменения поста (title, content, status, categories) поверх ответа БД
 const applyPostState = (rawPost, categoryOverrides = {}) => {
   if (!rawPost) return null;
   const postOverrides = loadFromStorage('usof_post_overrides', {});
@@ -42,7 +41,6 @@ const applyPostState = (rawPost, categoryOverrides = {}) => {
   };
 };
 
-// Фильтрует удаленные комментарии и применяет измененный статус (active/inactive) или текст
 const applyCommentsState = (rawComments) => {
   if (!Array.isArray(rawComments)) return [];
   const deletedIds = loadFromStorage('usof_deleted_comments', []);
@@ -101,28 +99,17 @@ const initSiteStats = () => {
 export const fetchPosts = createAsyncThunk(
   'posts/fetchPosts',
   async (append = false, { getState, rejectWithValue }) => {
-    const {
-      page,
-      limit,
-      sortBy,
-      order,
-      categoryId,
-      statusFilter,
-      startDate,
-      endDate,
-    } = getState().posts;
+    const { sortBy, order, statusFilter } = getState().posts;
     const { user, token } = getState().auth;
 
+    // Завантажуємо повний список постів, щоб клієнтське сортування (за датою/вподобайками)
+    // та фільтрація (за категорією/періодом) працювали точно по всій базі даних
     const params = {
-      page,
-      limit,
+      page: 1,
+      limit: 100,
       sortBy,
       order,
     };
-
-    if (categoryId) params.category = categoryId;
-    if (startDate) params.startDate = startDate;
-    if (endDate) params.endDate = endDate;
 
     if (user?.role === 'admin' && statusFilter && statusFilter !== 'active') {
       params.status = statusFilter;
@@ -133,30 +120,17 @@ export const fetchPosts = createAsyncThunk(
       const response = await axios.get('/api/posts', { params, headers });
       return { data: response.data, append };
     } catch (error) {
-      const errStatus = error.response?.status;
-      if ((errStatus === 401 || errStatus === 403) && token) {
-        try {
-          const publicParams = { ...params };
-          delete publicParams.status;
-          const retryResponse = await axios.get('/api/posts', {
-            params: publicParams,
-          });
-          return { data: retryResponse.data, append };
-        } catch (retryError) {
-          return rejectWithValue(
-            retryError.response?.data?.error ||
-              retryError.message ||
-              'Помилка завантаження постів'
-          );
-        }
+      try {
+        const retryResponse = await axios.get('/api/posts');
+        return { data: retryResponse.data, append };
+      } catch (retryError) {
+        return rejectWithValue(
+          retryError.response?.data?.error ||
+            error.response?.data?.error ||
+            error.message ||
+            'Помилка завантаження постів з БД'
+        );
       }
-
-      return rejectWithValue(
-        error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message ||
-          'Помилка завантаження постів з БД'
-      );
     }
   }
 );
@@ -612,7 +586,7 @@ export const createNewPost = createAsyncThunk(
         title: serverPost?.title || title,
         content: serverPost?.content || content,
         status: serverPost?.status || 'active',
-        publish_date: serverPost?.publish_date || new Date().toISOString(),
+        publish_date: new Date().toISOString(),
         likes_count: 0,
         comments_count: 0,
         categories: selectedCategoryObjects,
@@ -670,7 +644,6 @@ export const updateExistingPost = createAsyncThunk(
         ? allCategories.filter((c) => categories.includes(Number(c.id)))
         : undefined;
 
-    // Сохраняем изменения в localStorage, чтобы фоновый опрос каждые 4 сек не сбрасывал статус/текст
     const postOverrides = loadFromStorage('usof_post_overrides', {});
     const existingOv = postOverrides[String(postId)] || {};
     postOverrides[String(postId)] = {
@@ -979,7 +952,8 @@ const postsSlice = createSlice({
     limit: 10,
     totalPages: 1,
     paginationMode: 'pages',
-    sortBy: 'likes',
+    // За замовчуванням на головній сторінці: спадна дата додавання (найновіші перші)
+    sortBy: 'date',
     order: 'DESC',
     categoryId: null,
     statusFilter: 'active',
@@ -1063,13 +1037,19 @@ const postsSlice = createSlice({
       state.page = 1;
       if (mode === 'popular') {
         state.sortBy = 'likes';
+        state.order = 'DESC';
       } else if (mode === 'new' || mode === 'all') {
         state.sortBy = 'date';
+        state.order = 'DESC';
       }
     },
     setSortBy: (state, action) => {
       state.sortBy = action.payload;
-      state.viewMode = action.payload === 'likes' ? 'popular' : 'all';
+      if (action.payload === 'likes') {
+        state.viewMode = 'popular';
+      } else if (state.viewMode === 'popular') {
+        state.viewMode = 'all';
+      }
       state.page = 1;
     },
     setOrder: (state, action) => {
@@ -1077,7 +1057,9 @@ const postsSlice = createSlice({
       state.page = 1;
     },
     setCategoryId: (state, action) => {
-      state.categoryId = action.payload;
+      const val = action.payload;
+      state.categoryId =
+        val === null || val === '' || val === 'all' ? null : Number(val);
       state.selectedPostId = null;
       if (state.viewMode === 'saved' || state.viewMode === 'stats') {
         state.viewMode = 'all';
@@ -1279,11 +1261,14 @@ const postsSlice = createSlice({
           action.payload;
         state.previewCommentsByPost[postId] = comments;
 
+        // Завжди зберігаємо масив категорій (навіть порожній), щоб фільтрація за категорією працювала чітко
         if (state.categoryOverrides[postId]) {
           state.previewCategoriesByPost[postId] =
             state.categoryOverrides[postId];
-        } else if (categories && categories.length > 0) {
-          state.previewCategoriesByPost[postId] = categories;
+        } else {
+          state.previewCategoriesByPost[postId] = Array.isArray(categories)
+            ? categories
+            : [];
         }
 
         if (likesScore !== null && likesScore !== undefined) {
