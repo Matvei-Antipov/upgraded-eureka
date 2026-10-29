@@ -11,7 +11,64 @@ import { cleanupLegacyStorage } from '../utils/storage';
 cleanupLegacyStorage();
 
 const USER_CACHE_KEY = 'usof_current_user';
+const PROFILE_OVERRIDES_KEY = 'usof_profile_overrides';
 const pendingUserRequests = new Set();
+
+const loadProfileOverrides = () => {
+  try {
+    const raw = localStorage.getItem(PROFILE_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveProfileOverride = (userId, overrideData) => {
+  if (!userId) return;
+  try {
+    const overrides = loadProfileOverrides();
+    overrides[String(userId)] = {
+      ...(overrides[String(userId)] || {}),
+      ...overrideData,
+    };
+    localStorage.setItem(PROFILE_OVERRIDES_KEY, JSON.stringify(overrides));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const removeProfileOverride = (userId) => {
+  if (!userId) return;
+  try {
+    const overrides = loadProfileOverrides();
+    if (overrides[String(userId)]) {
+      delete overrides[String(userId)];
+      localStorage.setItem(PROFILE_OVERRIDES_KEY, JSON.stringify(overrides));
+    }
+  } catch {
+    // ignore
+  }
+};
+
+const applyUserOverride = (userObj) => {
+  if (!userObj || !userObj.id) return userObj;
+  const overrides = loadProfileOverrides();
+  const ov = overrides[String(userObj.id)];
+  if (!ov || !ov.login) return userObj;
+  if (
+    ov.baseDbLogin &&
+    userObj.login &&
+    ov.baseDbLogin !== userObj.login &&
+    ov.login !== userObj.login
+  ) {
+    removeProfileOverride(userObj.id);
+    return userObj;
+  }
+  return {
+    ...userObj,
+    login: ov.login,
+  };
+};
 
 export const getJwtSession = () => {
   const token = getStoredToken();
@@ -37,18 +94,18 @@ const loadCachedUser = () => {
     const raw = localStorage.getItem(USER_CACHE_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed && Number(parsed.id) === session.userId) {
-      return {
+      return applyUserOverride({
         ...parsed,
         id: session.userId,
         role: session.role || parsed.role || 'user',
-      };
+      });
     }
     localStorage.removeItem(USER_CACHE_KEY);
-    return {
+    return applyUserOverride({
       id: session.userId,
       login: `user_${session.userId}`,
       role: session.role,
-    };
+    });
   } catch {
     return null;
   }
@@ -86,11 +143,11 @@ export const verifySession = createAsyncThunk(
         saveCachedUser(null);
         return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
       }
-      const normalized = {
+      const normalized = applyUserOverride({
         ...fetched,
         id: session.userId,
         role: session.role || fetched.role || 'user',
-      };
+      });
       saveCachedUser(normalized);
       return normalized;
     } catch (error) {
@@ -117,7 +174,7 @@ export const fetchUserById = createAsyncThunk(
       if (!fetched || !fetched.id) {
         return { id: Number(userId), _notFound: true };
       }
-      return fetched;
+      return applyUserOverride(fetched);
     } catch (error) {
       if (error.response?.status === 404) {
         return { id: Number(userId), _notFound: true };
@@ -149,13 +206,30 @@ export const loginUser = createAsyncThunk(
   async ({ identifier, login, email, password }, { rejectWithValue }) => {
     try {
       const rawIdentifier = String(identifier || login || email || '').trim();
-      // Backend checks `WHERE login = ? OR email = ?`, so passing rawIdentifier
-      // to both fields lets the user sign in with either login or email.
-      const response = await api.post('/auth/login', {
-        login: rawIdentifier,
-        email: rawIdentifier,
-        password,
-      });
+      const matchedOverride = Object.values(loadProfileOverrides()).find(
+        (ov) =>
+          ov?.login &&
+          String(ov.login).toLowerCase() === rawIdentifier.toLowerCase()
+      );
+
+      let response;
+      try {
+        response = await api.post('/auth/login', {
+          login: matchedOverride?.baseDbLogin || rawIdentifier,
+          email: matchedOverride?.email || rawIdentifier,
+          password,
+        });
+      } catch (firstErr) {
+        if (matchedOverride) {
+          response = await api.post('/auth/login', {
+            login: rawIdentifier,
+            email: rawIdentifier,
+            password,
+          });
+        } else {
+          throw firstErr;
+        }
+      }
 
       const token = response.data?.token;
       const jwtPayload = parseJwt(token);
@@ -166,7 +240,7 @@ export const loginUser = createAsyncThunk(
       localStorage.setItem(TOKEN_KEY, token);
 
       const profileRes = await api.get(`/users/${jwtPayload.userId}`);
-      let userObj = profileRes.data;
+      let userObj = applyUserOverride(profileRes.data);
 
       if (userObj?.login) {
         try {
@@ -274,7 +348,7 @@ export const confirmPasswordReset = createAsyncThunk(
 export const updateUserProfile = createAsyncThunk(
   'auth/updateUserProfile',
   async (
-    { userId, full_name, email, isOwnProfile },
+    { userId, login, full_name, email, isOwnProfile },
     { getState, rejectWithValue }
   ) => {
     const session = getJwtSession();
@@ -292,28 +366,45 @@ export const updateUserProfile = createAsyncThunk(
         ? session.userId
         : requestedId;
 
+    const cleanLogin = login?.trim();
     const cleanFullName = full_name?.trim();
     const cleanEmail = email?.trim() || user?.email;
 
+    const finalizeUpdatedUser = (dbUser) => {
+      if (cleanLogin) {
+        saveProfileOverride(targetId, {
+          login: cleanLogin,
+          baseDbLogin: dbUser?.login || cleanLogin,
+          email: cleanEmail || dbUser?.email,
+        });
+      }
+      const merged = applyUserOverride({
+        ...dbUser,
+        ...(cleanLogin ? { login: cleanLogin } : {}),
+        ...(cleanFullName ? { full_name: cleanFullName } : {}),
+        ...(cleanEmail ? { email: cleanEmail } : {}),
+      });
+      if (targetId === session.userId) {
+        const normalizedOwn = {
+          ...merged,
+          id: session.userId,
+          role: session.role || merged.role || 'user',
+        };
+        saveCachedUser(normalizedOwn);
+        return normalizedOwn;
+      }
+      return merged;
+    };
+
     try {
       await api.patch(`/users/${targetId}`, {
+        ...(cleanLogin ? { login: cleanLogin } : {}),
         full_name: cleanFullName,
         email: cleanEmail,
       });
 
       const refreshed = await api.get(`/users/${targetId}`);
-      const updatedUser = refreshed.data;
-
-      if (targetId === session.userId) {
-        const normalizedOwn = {
-          ...updatedUser,
-          id: session.userId,
-          role: session.role || updatedUser.role || 'user',
-        };
-        saveCachedUser(normalizedOwn);
-        return normalizedOwn;
-      }
-      return updatedUser;
+      return finalizeUpdatedUser(refreshed.data);
     } catch (error) {
       // Backend returns 404 when values are identical to current DB row
       if (
@@ -321,17 +412,7 @@ export const updateUserProfile = createAsyncThunk(
         String(error.response?.data?.error || '').includes('no changes')
       ) {
         const refreshed = await api.get(`/users/${targetId}`);
-        const updatedUser = refreshed.data;
-        if (targetId === session.userId) {
-          const normalizedOwn = {
-            ...updatedUser,
-            id: session.userId,
-            role: session.role || updatedUser.role || 'user',
-          };
-          saveCachedUser(normalizedOwn);
-          return normalizedOwn;
-        }
-        return updatedUser;
+        return finalizeUpdatedUser(refreshed.data);
       }
       return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
@@ -378,7 +459,9 @@ export const fetchAllUsers = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const res = await api.get('/users');
-      return Array.isArray(res.data) ? res.data : [];
+      return Array.isArray(res.data)
+        ? res.data.map((u) => applyUserOverride(u))
+        : [];
     } catch (error) {
       return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
@@ -684,6 +767,7 @@ const authSlice = createSlice({
       })
       .addCase(adminDeleteUser.fulfilled, (state, action) => {
         const deletedId = Number(action.payload);
+        removeProfileOverride(deletedId);
         state.allUsers = state.allUsers.filter((u) => Number(u.id) !== deletedId);
         delete state.usersMap[String(deletedId)];
         if (

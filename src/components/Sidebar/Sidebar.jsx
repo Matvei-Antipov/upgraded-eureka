@@ -50,6 +50,9 @@ const Sidebar = () => {
   const handleCategoryClick = (id) => {
     dispatch(closeProfilePage());
     dispatch(closePostPage());
+    if (viewMode === 'saved' || viewMode === 'stats') {
+      dispatch(setViewMode('all'));
+    }
     if (id !== null && Number(categoryId) === Number(id)) {
       dispatch(setCategoryId(null));
     } else {
@@ -75,7 +78,22 @@ const Sidebar = () => {
                 handleNavClick('all');
               }}
             >
-              <span className="sidebar-icon">❖</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                  <polyline points="2 12 12 17 22 12" />
+                  <polyline points="2 17 12 22 22 17" />
+                </svg>
+              </span>
               <span className="sidebar-text">{t.navMain}</span>
             </button>
           </li>
@@ -91,7 +109,21 @@ const Sidebar = () => {
               }`}
               onClick={() => handleNavClick('popular')}
             >
-              <span className="sidebar-icon">↗</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                  <polyline points="17 6 23 6 23 12" />
+                </svg>
+              </span>
               <span className="sidebar-text">{t.navPopular}</span>
             </button>
           </li>
@@ -101,7 +133,21 @@ const Sidebar = () => {
               className={`sidebar-item ${viewMode === 'new' ? 'active' : ''}`}
               onClick={() => handleNavClick('new')}
             >
-              <span className="sidebar-icon">🕒</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <polyline points="12 7 12 12 15.5 14" />
+                </svg>
+              </span>
               <span className="sidebar-text">{t.navNew}</span>
             </button>
           </li>
@@ -111,15 +157,26 @@ const Sidebar = () => {
               className={`sidebar-item ${viewMode === 'saved' ? 'active' : ''}`}
               onClick={() => handleNavClick('saved')}
             >
-              <span className="sidebar-icon">🔖</span>
-              <span className="sidebar-text">{t.navSaved}</span>
-              <span
-                className={`saved-count-badge ${
-                  savedCount > 0 ? 'has-items' : ''
-                }`}
-              >
-                {savedCount}
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
               </span>
+              <span className="sidebar-text">{t.navSaved}</span>
+              {savedCount > 0 && (
+                <span className="saved-count-badge has-items">
+                  {savedCount}
+                </span>
+              )}
             </button>
           </li>
           <li>
@@ -128,48 +185,53 @@ const Sidebar = () => {
               className={`sidebar-item ${viewMode === 'stats' ? 'active' : ''}`}
               onClick={() => handleNavClick('stats')}
             >
-              <span className="sidebar-icon">📊</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+              </span>
               <span className="sidebar-text">{t.navStats}</span>
             </button>
           </li>
         </ul>
       </div>
 
+      <div className="sidebar-divider" />
+
       <div className="sidebar-block">
         <h3 className="sidebar-heading">{t.categoriesSection}</h3>
         <ul className="sidebar-categories">
-          <li>
-            <button
-              type="button"
-              className={`sidebar-cat-btn ${
-                categoryId === null ? 'active' : ''
-              }`}
-              onClick={() => handleCategoryClick(null)}
-            >
-              <span className="category-name">{t.allCategories}</span>
-            </button>
-          </li>
           {categories.length === 0 ? (
             <li className="sidebar-empty">{t.noCategories}</li>
           ) : (
-            categories.map((cat) => (
-              <li key={cat.id}>
-                <button
-                  type="button"
-                  className={`sidebar-cat-btn ${
-                    Number(categoryId) === Number(cat.id) ? 'active' : ''
-                  }`}
-                  onClick={() => handleCategoryClick(Number(cat.id))}
-                >
-                  <span className="category-name">
-                    {cat.title || cat.name}
-                  </span>
-                  {cat.description && (
-                    <span className="category-desc">{cat.description}</span>
-                  )}
-                </button>
-              </li>
-            ))
+            categories.map((cat) => {
+              const isCatActive = Number(categoryId) === Number(cat.id);
+              return (
+                <li key={cat.id}>
+                  <button
+                    type="button"
+                    className={`sidebar-cat-btn ${isCatActive ? 'active' : ''}`}
+                    onClick={() => handleCategoryClick(Number(cat.id))}
+                    title={cat.description || cat.title || cat.name}
+                  >
+                    <span className="category-name">
+                      {cat.title || cat.name}
+                    </span>
+                  </button>
+                </li>
+              );
+            })
           )}
         </ul>
       </div>

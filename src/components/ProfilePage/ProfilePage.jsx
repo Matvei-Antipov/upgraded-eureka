@@ -78,6 +78,7 @@ const ProfilePage = () => {
     (jwtSession || user) && (isOwnProfile || isAdmin)
   );
 
+  const [loginInput, setLoginInput] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [profileFormError, setProfileFormError] = useState('');
@@ -126,6 +127,7 @@ const ProfilePage = () => {
     setProfileFormError('');
     setVisiblePostsCount(PROFILE_POSTS_STEP);
     if (targetUser) {
+      setLoginInput(targetUser.login || '');
       setFullName(targetUser.full_name || targetUser.login || '');
       setEmail(targetUser.email || '');
       if (targetUser.id && !targetUser.email) {
@@ -231,6 +233,26 @@ const ProfilePage = () => {
     e.preventDefault();
     setProfileFormError('');
 
+    const cleanLogin = loginInput.trim();
+    if (!cleanLogin || cleanLogin.length < 3) {
+      setProfileFormError(t.loginTooShortError);
+      return;
+    }
+
+    const effectiveTargetId = isOwnProfile
+      ? jwtSession?.userId || user?.id
+      : targetUser.id;
+
+    const loginTaken = allUsers.some(
+      (u) =>
+        Number(u.id) !== Number(effectiveTargetId) &&
+        String(u.login || '').toLowerCase() === cleanLogin.toLowerCase()
+    );
+    if (loginTaken) {
+      setProfileFormError(t.loginAlreadyTakenError);
+      return;
+    }
+
     if (!fullName.trim() || fullName.trim().length < 2) {
       setProfileFormError(t.fillAllFieldsError);
       return;
@@ -243,10 +265,9 @@ const ProfilePage = () => {
     try {
       await dispatch(
         updateUserProfile({
-          userId: isOwnProfile
-            ? jwtSession?.userId || user?.id
-            : targetUser.id,
+          userId: effectiveTargetId,
           isOwnProfile,
+          login: cleanLogin,
           full_name: fullName.trim(),
           email: email.trim(),
         })
@@ -467,9 +488,11 @@ const ProfilePage = () => {
                   <input
                     type="text"
                     className="profile-input"
-                    value={targetUser.login || ''}
-                    disabled
+                    value={loginInput}
+                    onChange={(e) => setLoginInput(e.target.value)}
+                    minLength={3}
                     title={t.loginReadonlyHint}
+                    required
                   />
                 </div>
                 <div className="profile-field">
