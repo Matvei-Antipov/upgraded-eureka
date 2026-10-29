@@ -45,15 +45,6 @@ const MainPage = () => {
   }, [language]);
 
   useEffect(() => {
-    const svgFavicon =
-      "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='2' y='6' width='60' height='52' rx='12' ry='12' fill='%23ffffff' stroke='%23111827' stroke-width='4'/><path d='M 23 24 L 14 32 L 23 40' fill='none' stroke='%23111827' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/><path d='M 41 24 L 50 32 L 41 40' fill='none' stroke='%23111827' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/><line x1='35' y1='21' x2='29' y2='43' stroke='%23111827' stroke-width='4.5' stroke-linecap='round'/></svg>";
-    const links = document.querySelectorAll("link[rel*='icon']");
-    links.forEach((link) => {
-      link.href = svgFavicon;
-    });
-  }, []);
-
-  useEffect(() => {
     dispatch(verifySession());
     dispatch(checkApiHealth());
 
