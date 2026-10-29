@@ -1,475 +1,418 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
-  closeAuthModal,
-  openAuthModal,
   loginUser,
   registerUser,
   requestPasswordReset,
   confirmPasswordReset,
+  closeAuthModal,
+  openAuthModal,
 } from '../../store/authSlice';
-import { showNotification, fetchPosts } from '../../store/postsSlice';
+import { showNotification } from '../../store/postsSlice';
 import { translations } from '../../i18n/translations';
 import './AuthModal.css';
 
 const AuthModal = () => {
   const dispatch = useDispatch();
-  const {
-    isAuthModalOpen,
-    authModalTab,
-    resetTokenFromUrl,
-    usersList,
-    status,
-    error,
-    language,
-  } = useSelector((state) => state.auth);
+  const { isAuthModalOpen, authModalMode, status, error, resetToken, language } =
+    useSelector((state) => state.auth);
 
   const t = translations[language] || translations.uk;
 
+  const [mode, setMode] = useState('login');
   const [login, setLogin] = useState('');
-  const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [resetStep, setResetStep] = useState(1);
-  const [fieldErrors, setFieldErrors] = useState({});
+  const [tokenInput, setTokenInput] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [localError, setLocalError] = useState('');
 
   useEffect(() => {
-    if (resetTokenFromUrl) {
-      setResetToken(resetTokenFromUrl);
-      setResetStep(2);
+    if (authModalMode) {
+      setMode(authModalMode);
     }
-  }, [resetTokenFromUrl]);
+    setLocalError('');
+  }, [authModalMode, isAuthModalOpen]);
+
+  useEffect(() => {
+    if (resetToken) {
+      setTokenInput(resetToken);
+      setMode('reset-confirm');
+    }
+  }, [resetToken]);
 
   if (!isAuthModalOpen) return null;
 
-  const switchTab = (tab) => {
-    setFieldErrors({});
-    dispatch(openAuthModal(tab));
+  const switchMode = (nextMode) => {
+    setMode(nextMode);
+    setLocalError('');
+    dispatch(openAuthModal(nextMode));
   };
 
-  // Автоматическая подстановка email по логину (из кэша или списка пользователей БД)
-  const handleLoginInputChange = (val) => {
-    setLogin(val);
-    const trimmed = val.trim().toLowerCase();
-    if (!trimmed) return;
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+
+    if (!login.trim() || !password) {
+      setLocalError(t.fillAllFieldsError);
+      return;
+    }
 
     try {
-      const raw = localStorage.getItem('usof_registered_profiles');
-      const map = raw ? JSON.parse(raw) : {};
-      if (map[trimmed]?.email && !email) {
-        setEmail(map[trimmed].email);
-        return;
-      }
-    } catch {
-      // Ignore
-    }
-
-    const foundUser = (usersList || []).find(
-      (u) => u.login && u.login.toLowerCase() === trimmed
-    );
-    if (foundUser?.email && !email) {
-      setEmail(foundUser.email);
-    }
-  };
-
-  const validate = () => {
-    const errs = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (authModalTab === 'login') {
-      if (!login.trim()) errs.login = t.errEnterLogin;
-      if (!password) errs.password = t.errEnterPass;
-    } else if (authModalTab === 'register') {
-      if (!login.trim() || login.trim().length < 3) {
-        errs.login = t.errLoginMin;
-      }
-      if (!email.trim() || !emailRegex.test(email.trim())) {
-        errs.email = t.errEmailInvalid;
-      }
-      if (!fullName.trim() || fullName.trim().length < 2) {
-        errs.fullName = t.errFullNameMin;
-      }
-      if (!password || password.length < 6) {
-        errs.password = t.errPassMin;
-      }
-      if (password !== passwordConfirm) {
-        errs.passwordConfirm = t.errPassMatch;
-      }
-    } else if (authModalTab === 'reset') {
-      if (resetStep === 1) {
-        if (!email.trim() || !emailRegex.test(email.trim())) {
-          errs.email = t.errEmailInvalid;
-        }
-      } else {
-        if (!resetToken.trim()) errs.resetToken = t.errTokenReq;
-        if (!password || password.length < 6) {
-          errs.password = t.errPassMin;
-        }
-      }
-    }
-
-    setFieldErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    if (authModalTab === 'login') {
-      const res = await dispatch(
+      await dispatch(
         loginUser({
           login: login.trim(),
-          email: email.trim(),
+          email: login.trim(),
           password,
         })
+      ).unwrap();
+
+      dispatch(
+        showNotification({
+          message: t.loginSuccessToast,
+          type: 'success',
+        })
       );
-      if (loginUser.fulfilled.match(res)) {
-        dispatch(fetchPosts());
-        dispatch(
-          showNotification({
-            message:
-              language === 'en'
-                ? `Welcome, ${
-                    res.payload.user?.full_name ||
-                    res.payload.user?.login ||
-                    login
-                  }!`
-                : `Вітаємо, ${
-                    res.payload.user?.full_name ||
-                    res.payload.user?.login ||
-                    login
-                  }! Ви увійшли в систему.`,
-          })
-        );
-      }
-    } else if (authModalTab === 'register') {
-      const res = await dispatch(
+      dispatch(closeAuthModal());
+    } catch (err) {
+      setLocalError(typeof err === 'string' ? err : t.loginFailedError);
+    }
+  };
+
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+
+    if (!login.trim() || !email.trim() || !password) {
+      setLocalError(t.fillAllFieldsError);
+      return;
+    }
+
+    if (password.length < 6) {
+      setLocalError(t.passwordTooShortError);
+      return;
+    }
+
+    if (passwordConfirm && password !== passwordConfirm) {
+      setLocalError(t.passwordsDoNotMatchError);
+      return;
+    }
+
+    try {
+      await dispatch(
         registerUser({
           login: login.trim(),
+          full_name: fullName.trim() || login.trim(),
           email: email.trim(),
-          fullName: fullName.trim(),
           password,
-          passwordConfirmation: passwordConfirm,
+          password_confirmation: passwordConfirm || password,
+        })
+      ).unwrap();
+
+      dispatch(
+        showNotification({
+          message: t.registerSuccessToast,
+          type: 'success',
         })
       );
-      if (registerUser.fulfilled.match(res)) {
-        dispatch(
-          showNotification({
-            message:
-              language === 'en'
-                ? 'Registration successful! Please sign in.'
-                : 'Реєстрація успішна! Тепер увійдіть у свій акаунт.',
-          })
-        );
-        switchTab('login');
-      }
-    } else if (authModalTab === 'reset') {
-      if (resetStep === 1) {
-        const res = await dispatch(
-          requestPasswordReset({ email: email.trim() })
-        );
-        if (requestPasswordReset.fulfilled.match(res)) {
-          dispatch(
-            showNotification({
-              message:
-                language === 'en'
-                  ? 'Password reset instructions sent to your email!'
-                  : 'Інструкції для скидання пароля надіслано на ваш Email!',
-            })
-          );
-          setResetStep(2);
-        }
-      } else {
-        const res = await dispatch(
-          confirmPasswordReset({
-            token: resetToken.trim(),
-            newPassword: password,
-          })
-        );
-        if (confirmPasswordReset.fulfilled.match(res)) {
-          dispatch(
-            showNotification({
-              message:
-                language === 'en'
-                  ? 'Password updated! Sign in with your new password.'
-                  : 'Пароль успішно змінено! Увійдіть з новим паролем.',
-            })
-          );
-          setResetStep(1);
-          switchTab('login');
-        }
-      }
+      dispatch(closeAuthModal());
+    } catch (err) {
+      setLocalError(typeof err === 'string' ? err : t.registerFailedError);
+    }
+  };
+
+  const handleRequestReset = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+
+    if (!email.trim()) {
+      setLocalError(t.enterEmailError);
+      return;
+    }
+
+    try {
+      await dispatch(requestPasswordReset(email.trim())).unwrap();
+      dispatch(
+        showNotification({
+          message: t.resetLinkSentToast,
+          type: 'success',
+        })
+      );
+      setMode('reset-confirm');
+    } catch (err) {
+      setLocalError(typeof err === 'string' ? err : t.resetRequestFailedError);
+    }
+  };
+
+  const handleConfirmReset = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+
+    if (!tokenInput.trim() || !newPassword) {
+      setLocalError(t.fillAllFieldsError);
+      return;
+    }
+
+    try {
+      await dispatch(
+        confirmPasswordReset({
+          token: tokenInput.trim(),
+          newPassword,
+        })
+      ).unwrap();
+
+      dispatch(
+        showNotification({
+          message: t.passwordChangedToast,
+          type: 'success',
+        })
+      );
+      setMode('login');
+    } catch (err) {
+      setLocalError(typeof err === 'string' ? err : t.resetConfirmFailedError);
     }
   };
 
   return (
     <div
-      className="modal-backdrop"
+      className="auth-modal-backdrop"
       onClick={() => dispatch(closeAuthModal())}
-      role="dialog"
-      aria-modal="true"
+      role="presentation"
     >
       <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="auth-modal-header">
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={`auth-tab ${authModalTab === 'login' ? 'active' : ''}`}
-              onClick={() => switchTab('login')}
-            >
-              {t.loginTab}
-            </button>
-            <button
-              type="button"
-              className={`auth-tab ${
-                authModalTab === 'register' ? 'active' : ''
-              }`}
-              onClick={() => switchTab('register')}
-            >
-              {t.registerTab}
-            </button>
-            <button
-              type="button"
-              className={`auth-tab ${authModalTab === 'reset' ? 'active' : ''}`}
-              onClick={() => switchTab('reset')}
-            >
-              {t.resetTab}
-            </button>
-          </div>
+          <h2 className="auth-modal-title">
+            {mode === 'login' && t.authLoginTitle}
+            {mode === 'register' && t.authRegisterTitle}
+            {(mode === 'reset' || mode === 'reset-confirm') && t.authResetTitle}
+          </h2>
           <button
             type="button"
-            className="modal-close-btn"
+            className="auth-modal-close"
             onClick={() => dispatch(closeAuthModal())}
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          {error && <div className="auth-server-error">{error}</div>}
+        {(mode === 'login' || mode === 'register') && (
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={`auth-tab-btn ${mode === 'login' ? 'active' : ''}`}
+              onClick={() => switchMode('login')}
+            >
+              {t.loginBtn}
+            </button>
+            <button
+              type="button"
+              className={`auth-tab-btn ${mode === 'register' ? 'active' : ''}`}
+              onClick={() => switchMode('register')}
+            >
+              {t.registerBtn}
+            </button>
+          </div>
+        )}
 
-          {authModalTab === 'login' && (
-            <>
-              <div className="form-field">
-                <label className="form-label">{t.loginLabel}</label>
-                <input
-                  type="text"
-                  name="login"
-                  value={login}
-                  onChange={(e) => handleLoginInputChange(e.target.value)}
-                  placeholder="testcaser"
-                  className="form-input"
-                />
-                {fieldErrors.login && (
-                  <span className="field-error-text">{fieldErrors.login}</span>
-                )}
-              </div>
+        {(localError || error) && (
+          <div className="auth-error-banner">{localError || error}</div>
+        )}
 
-              <div className="form-field">
-                <label className="form-label">Email</label>
-                <input
-                  type="email"
-                  name="login_email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="form-input"
-                />
-              </div>
+        {mode === 'login' && (
+          <form className="auth-form" onSubmit={handleLoginSubmit}>
+            <div className="auth-field">
+              <label className="auth-label">{t.loginOrEmailLabel}</label>
+              <input
+                type="text"
+                className="auth-input"
+                placeholder={t.loginInputPlaceholder}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="form-field">
-                <label className="form-label">{t.passwordLabel}</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="form-input"
-                />
-                {fieldErrors.password && (
-                  <span className="field-error-text">
-                    {fieldErrors.password}
-                  </span>
-                )}
-              </div>
+            <div className="auth-field">
+              <label className="auth-label">{t.passwordLabel}</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder={t.passwordPlaceholder}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
+            <div className="auth-Reset-row">
               <button
-                type="submit"
-                className="auth-submit-btn"
-                disabled={status === 'loading'}
+                type="button"
+                className="auth-link-btn"
+                onClick={() => switchMode('reset')}
               >
-                {status === 'loading' ? t.signingInText : t.signInSubmit}
+                {t.forgotPasswordLink}
               </button>
-            </>
-          )}
+            </div>
 
-          {authModalTab === 'register' && (
-            <>
-              <div className="form-field">
-                <label className="form-label">{t.loginLabel}</label>
-                <input
-                  type="text"
-                  name="register_login"
-                  value={login}
-                  onChange={(e) => setLogin(e.target.value)}
-                  placeholder="dev_ukraine"
-                  className="form-input"
-                />
-                {fieldErrors.login && (
-                  <span className="field-error-text">{fieldErrors.login}</span>
-                )}
-              </div>
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? t.processingBtn : t.submitLoginBtn}
+            </button>
+          </form>
+        )}
 
-              <div className="form-field">
-                <label className="form-label">{t.fullNameLabel}</label>
-                <input
-                  type="text"
-                  name="register_full_name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Tester Caser"
-                  className="form-input"
-                />
-                {fieldErrors.fullName && (
-                  <span className="field-error-text">
-                    {fieldErrors.fullName}
-                  </span>
-                )}
-              </div>
+        {mode === 'register' && (
+          <form className="auth-form" onSubmit={handleRegisterSubmit}>
+            <div className="auth-field">
+              <label className="auth-label">{t.loginLabel}</label>
+              <input
+                type="text"
+                className="auth-input"
+                placeholder={t.loginInputPlaceholder}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="form-field">
-                <label className="form-label">Email</label>
-                <input
-                  type="email"
-                  name="register_email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="form-input"
-                />
-                {fieldErrors.email && (
-                  <span className="field-error-text">{fieldErrors.email}</span>
-                )}
-              </div>
+            <div className="auth-field">
+              <label className="auth-label">{t.fullNameLabel}</label>
+              <input
+                type="text"
+                className="auth-input"
+                placeholder={t.fullNamePlaceholder}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </div>
 
-              <div className="form-field">
-                <label className="form-label">{t.passwordLabel}</label>
-                <input
-                  type="password"
-                  name="register_password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="form-input"
-                />
-                {fieldErrors.password && (
-                  <span className="field-error-text">
-                    {fieldErrors.password}
-                  </span>
-                )}
-              </div>
+            <div className="auth-field">
+              <label className="auth-label">{t.emailLabel}</label>
+              <input
+                type="email"
+                className="auth-input"
+                placeholder={t.emailPlaceholder}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="form-field">
-                <label className="form-label">{t.confirmPasswordLabel}</label>
-                <input
-                  type="password"
-                  name="register_password_confirm"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  placeholder="••••••••"
-                  className="form-input"
-                />
-                {fieldErrors.passwordConfirm && (
-                  <span className="field-error-text">
-                    {fieldErrors.passwordConfirm}
-                  </span>
-                )}
-              </div>
+            <div className="auth-field">
+              <label className="auth-label">{t.passwordLabel}</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder={t.passwordPlaceholder}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
-              <button
-                type="submit"
-                className="auth-submit-btn"
-                disabled={status === 'loading'}
-              >
-                {status === 'loading' ? t.signingUpText : t.signUpSubmit}
-              </button>
-            </>
-          )}
+            <div className="auth-field">
+              <label className="auth-label">{t.confirmPasswordLabel}</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder={t.confirmPasswordPlaceholder}
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                required
+              />
+            </div>
 
-          {authModalTab === 'reset' && (
-            <>
-              {resetStep === 1 ? (
-                <>
-                  <div className="form-field">
-                    <label className="form-label">{t.resetEmailLabel}</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com"
-                      className="form-input"
-                    />
-                    {fieldErrors.email && (
-                      <span className="field-error-text">
-                        {fieldErrors.email}
-                      </span>
-                    )}
-                  </div>
-                  <button type="submit" className="auth-submit-btn">
-                    {t.sendResetTokenBtn}
-                  </button>
-                  <button
-                    type="button"
-                    className="auth-secondary-link"
-                    onClick={() => setResetStep(2)}
-                  >
-                    {t.haveTokenLink}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="form-field">
-                    <label className="form-label">{t.confirmTokenLabel}</label>
-                    <input
-                      type="text"
-                      value={resetToken}
-                      onChange={(e) => setResetToken(e.target.value)}
-                      placeholder="Token..."
-                      className="form-input"
-                    />
-                    {fieldErrors.resetToken && (
-                      <span className="field-error-text">
-                        {fieldErrors.resetToken}
-                      </span>
-                    )}
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">{t.newPasswordLabel}</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="form-input"
-                    />
-                    {fieldErrors.password && (
-                      <span className="field-error-text">
-                        {fieldErrors.password}
-                      </span>
-                    )}
-                  </div>
-                  <button type="submit" className="auth-submit-btn">
-                    {t.saveNewPasswordBtn}
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </form>
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? t.processingBtn : t.submitRegisterBtn}
+            </button>
+          </form>
+        )}
+
+        {mode === 'reset' && (
+          <form className="auth-form" onSubmit={handleRequestReset}>
+            <p className="auth-reset-desc">{t.resetPasswordDesc}</p>
+            <div className="auth-field">
+              <label className="auth-label">{t.emailLabel}</label>
+              <input
+                type="email"
+                className="auth-input"
+                placeholder={t.emailPlaceholder}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? t.processingBtn : t.sendResetLinkBtn}
+            </button>
+
+            <button
+              type="button"
+              className="auth-link-btn center"
+              onClick={() => switchMode('login')}
+            >
+              {t.backToLoginLink}
+            </button>
+          </form>
+        )}
+
+        {mode === 'reset-confirm' && (
+          <form className="auth-form" onSubmit={handleConfirmReset}>
+            <div className="auth-field">
+              <label className="auth-label">{t.resetTokenLabel}</label>
+              <input
+                type="text"
+                className="auth-input"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">{t.newPasswordLabel}</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder={t.passwordPlaceholder}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? t.processingBtn : t.confirmResetBtn}
+            </button>
+
+            <button
+              type="button"
+              className="auth-link-btn center"
+              onClick={() => switchMode('login')}
+            >
+              {t.backToLoginLink}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

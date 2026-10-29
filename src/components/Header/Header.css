@@ -6,280 +6,262 @@
   border-bottom: 1px solid #eaeaea;
 }
 
-.header-inner {
-  max-width: 1160px;
+.header-container {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px;
-  min-height: 64px;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  box-sizing: border-box;
 }
 
-.header-logo {
+/* Логотип «</> розбір — спільнота розробників» */
+.header-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  text-decoration: none;
-  color: #111111;
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: -0.02em;
+  cursor: pointer;
+  user-select: none;
   flex-shrink: 0;
 }
 
-.logo-icon {
+.brand-logo-box {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid #111111;
-  border-radius: 5px;
-  padding: 2px 6px;
+  width: 34px;
+  height: 28px;
+  border: 1.5px solid #111827;
+  border-radius: 6px;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  font-family: monospace;
   font-weight: 700;
+  color: #111827;
+  background-color: #ffffff;
 }
 
-.header-search-wrapper {
-  flex: 1;
-  max-width: 480px;
-  position: relative;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
 
+.brand-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: -0.3px;
+}
+
+.brand-subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* Поиск */
 .header-search {
+  flex: 1;
+  max-width: 460px;
+  position: relative;
   display: flex;
   align-items: center;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 0 12px;
-  height: 38px;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.header-search:focus-within {
-  background-color: #ffffff;
-  border-color: #111111;
 }
 
 .search-icon {
-  font-size: 13px;
-  color: #9ca3af;
-  margin-right: 8px;
-}
-
-.header-search input {
-  width: 100%;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: #111111;
-  outline: none;
-}
-
-.header-search input::placeholder {
-  color: #9ca3af;
-}
-
-.clear-search-btn {
-  background: none;
-  border: none;
-  color: #9ca3af;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px;
-}
-
-.input-error-msg {
   position: absolute;
-  top: 42px;
-  left: 4px;
-  font-size: 11px;
-  color: #dc2626;
-}
-
-.header-user-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.user-details {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.2;
-}
-
-.user-login {
+  left: 12px;
   font-size: 13px;
-  font-weight: 600;
-  color: #111111;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #9ca3af;
+  pointer-events: none;
 }
 
-.user-role-pill {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-top: 2px;
-}
-
-.user-role-pill.admin {
-  background-color: #111111;
-  color: #ffffff;
-}
-
-.user-role-pill.user {
-  background-color: #ecfdf5;
-  color: #059669;
-}
-
-.user-role-pill.guest {
-  background-color: #f3f4f6;
-  color: #6b7280;
-}
-
-.avatar-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+.search-input {
+  width: 100%;
+  background-color: #f9fafb;
   border: 1px solid #e5e7eb;
-  background-color: #f3f4f6;
-  color: #111111;
+  border-radius: 8px;
+  padding: 8px 32px 8px 34px;
+  font-size: 13px;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-input:focus {
+  background-color: #ffffff;
+  border-color: #111827;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: #9ca3af;
   font-size: 12px;
-  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.search-clear-btn:hover {
+  color: #111827;
+}
+
+/* Правая часть шапки */
+.header-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  overflow: hidden;
-  padding: 0;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.logout-btn {
-  background: transparent;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.logout-btn:hover {
-  border-color: #111111;
-  color: #111111;
-}
-
-.feed-nav-link {
-  background: none;
-  border: none;
-  font-size: 14px;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  transition: color 0.15s ease, background-color 0.15s ease;
-}
-
-.feed-nav-link:hover,
-.feed-nav-link.highlighted {
-  color: #111111;
-  background-color: #f9fafb;
-}
-
-.lang-toggle-pill {
+.lang-switcher {
   display: inline-flex;
-  align-items: center;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #f9fafb;
+  background-color: #ffffff;
 }
 
 .lang-btn {
   background: transparent;
   border: none;
-  padding: 5px 8px;
+  padding: 4px 8px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #6b7280;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .lang-btn.active {
-  background-color: #111111;
+  background-color: #111827;
   color: #ffffff;
 }
 
-/* Планшеты */
-@media (max-width: 900px) {
-  .header-inner {
-    padding: 10px 16px;
-    gap: 12px;
-  }
-
-  .feed-nav-link {
-    display: none;
-  }
+.header-user-area,
+.header-guest-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-/* Мобильные телефоны */
-@media (max-width: 650px) {
-  .header-inner {
+.user-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.user-profile-trigger:hover {
+  background-color: #f9fafb;
+}
+
+.user-info-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.user-login {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.user-role-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.user-role-badge.admin {
+  background-color: #111827;
+  color: #ffffff;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  overflow: hidden;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.logout-btn,
+.login-btn {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.logout-btn:hover,
+.login-btn:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.register-btn {
+  background-color: #111827;
+  border: 1px solid #111827;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.register-btn:hover {
+  background-color: #1f2937;
+}
+
+.guest-badge {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .header-container {
     flex-wrap: wrap;
-    padding: 10px 12px;
-    gap: 10px;
+    padding: 10px 16px;
   }
 
-  .header-logo {
-    order: 1;
-    font-size: 16px;
-  }
-
-  .header-user-section {
-    order: 2;
-    margin-left: auto;
-    gap: 8px;
-  }
-
-  .header-search-wrapper {
+  .header-search {
     order: 3;
-    flex: 1 1 100%;
     max-width: 100%;
-  }
-
-  .user-login {
-    max-width: 85px;
-    font-size: 12px;
-  }
-
-  .logout-btn {
-    padding: 5px 9px;
-    font-size: 11px;
-  }
-}
-
-@media (max-width: 380px) {
-  .user-details {
-    display: none;
+    flex-basis: 100%;
   }
 }

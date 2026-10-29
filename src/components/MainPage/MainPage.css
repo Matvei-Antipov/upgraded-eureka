@@ -1,135 +1,169 @@
-.app-container {
+.app-wrapper {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
-  color: #111111;
-  overflow-x: hidden;
+  color: #111827;
 }
 
-.main-layout {
-  max-width: 1160px;
+.main-container {
+  flex: 1;
   width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 28px 24px;
   display: flex;
   align-items: flex-start;
-  gap: 48px;
-  flex: 1;
-  box-sizing: border-box;
+  gap: 32px;
 }
 
-.content-area {
+.main-content-area {
   flex: 1;
   min-width: 0;
-  width: 100%;
 }
 
-/* Всплывающее уведомление о новом комментарии под вашим постом */
-.comment-alert-toast {
+/* Всплывающие нотификации (тосты) */
+.toast-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  width: 340px;
-  max-width: calc(100vw - 32px);
-  background-color: #111111;
-  color: #ffffff;
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
-  z-index: 450;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  animation: toastFadeIn 0.2s ease-out;
-  box-sizing: border-box;
+  gap: 10px;
+  max-width: 380px;
 }
 
-.comment-alert-top {
+.toast-banner {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  background-color: #111827;
+  color: #ffffff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+  font-weight: 500;
+  animation: toastSlideUp 0.2s ease-out;
 }
 
-.comment-alert-title {
-  font-size: 13px;
+.toast-banner.success {
+  border-left: 4px solid #10b981;
+}
+
+.toast-banner.error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast-icon {
   font-weight: 700;
+  font-size: 14px;
   color: #10b981;
 }
 
-.comment-alert-close {
-  background: none;
+.toast-banner.error .toast-icon {
+  color: #ef4444;
+}
+
+.toast-text {
+  flex: 1;
+  color: #ffffff;
+  line-height: 1.4;
+}
+
+.toast-close-btn {
+  background: transparent;
   border: none;
   color: #9ca3af;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 14px;
   padding: 2px 4px;
 }
 
-.comment-alert-close:hover {
+.toast-close-btn:hover {
   color: #ffffff;
 }
 
-.comment-alert-body {
-  margin: 0;
+/* Всплывающее уведомление о новом комментарии */
+.comment-alert-container {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  z-index: 9998;
+  max-width: 360px;
+  width: 100%;
+}
+
+.comment-alert-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #111827;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  color: #111827;
+  animation: toastSlideUp 0.2s ease-out;
+}
+
+.comment-alert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
-  line-height: 1.45;
-  color: #f3f4f6;
+  margin-bottom: 6px;
+  color: #111827;
+}
+
+.comment-alert-close {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.comment-alert-body {
+  font-size: 12px;
+  color: #4b5563;
+  margin: 0 0 6px 0;
 }
 
 .comment-alert-snippet {
-  margin: 0;
   font-size: 12px;
-  color: #9ca3af;
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.comment-alert-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.comment-alert-view-btn {
-  background-color: #ffffff;
-  color: #111111;
-  border: none;
+  color: #111827;
+  background-color: #f9fafb;
+  padding: 6px 8px;
   border-radius: 6px;
-  padding: 7px 14px;
+  margin: 0 0 10px 0;
+}
+
+.comment-alert-action {
+  background-color: #111827;
+  color: #ffffff !important;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.15s ease;
 }
 
-.comment-alert-view-btn:hover {
-  background-color: #e5e7eb;
+@keyframes toastSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Планшеты */
 @media (max-width: 900px) {
-  .main-layout {
+  .main-container {
     flex-direction: column;
+    padding: 20px 16px;
     gap: 20px;
-    padding: 20px 16px 48px;
-  }
-}
-
-/* Мобильные телефоны */
-@media (max-width: 600px) {
-  .main-layout {
-    padding: 14px 12px 36px;
-    gap: 16px;
-  }
-
-  .comment-alert-toast {
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
-    width: auto;
   }
 }

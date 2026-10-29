@@ -1,6 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
-import { clearInvalidSession, openAuthModal, fetchUserById } from './authSlice';
+import {
+  clearInvalidSession,
+  openAuthModal,
+  fetchUserById,
+  logoutUser,
+  updateUserProfile,
+  uploadUserAvatar,
+} from './authSlice';
 
 export const REACTION_TYPES = [
   { id: 'fire', emoji: '🔥', label: 'Гаряче', labelEn: 'Hot', weight: 2 },
@@ -597,7 +604,7 @@ export const createNewPost = createAsyncThunk(
         dispatch(clearInvalidSession());
         dispatch(openAuthModal('login'));
         return rejectWithValue(
-          'Ваша сесія застаріла (користувача не знайдено в БД). Будь ласка, увійдіть заново!'
+          'Ваша сесія застаріла. Будь ласка, увійдіть заново!'
         );
       }
 
@@ -950,7 +957,6 @@ const postsSlice = createSlice({
     limit: 10,
     totalPages: 1,
     paginationMode: 'pages',
-    // Пункт 1 PDF: по умолчанию посты отсортированы по убывающей дате добавления
     sortBy: 'date',
     order: 'DESC',
     categoryId: null,
@@ -982,7 +988,10 @@ const postsSlice = createSlice({
     showNotification: (state, action) => {
       state.notification = {
         id: Date.now(),
-        message: action.payload?.message || action.payload,
+        message:
+          typeof action.payload === 'string'
+            ? action.payload
+            : action.payload?.message || 'Дію виконано!',
         type: action.payload?.type || 'success',
       };
     },
@@ -1119,6 +1128,11 @@ const postsSlice = createSlice({
       };
 
       saveToStorage('usof_post_reactions', state.postReactions);
+      state.notification = {
+        id: Date.now(),
+        message: isSelected ? 'Реакцію прибрано' : 'Реакцію додано!',
+        type: 'success',
+      };
     },
     toggleCommentReaction: (state, action) => {
       const { commentId, reactionId } = action.payload;
@@ -1147,18 +1161,31 @@ const postsSlice = createSlice({
       };
 
       saveToStorage('usof_comment_reactions', state.commentReactions);
+      state.notification = {
+        id: Date.now(),
+        message: isSelected ? 'Реакцію прибрано' : 'Реакцію додано!',
+        type: 'success',
+      };
     },
     toggleSavePost: (state, action) => {
       const post = action.payload;
       if (!post || !post.id) return;
 
-      if (state.savedPosts[post.id]) {
+      const wasSaved = Boolean(state.savedPosts[post.id]);
+      if (wasSaved) {
         delete state.savedPosts[post.id];
       } else {
         state.savedPosts[post.id] = post;
       }
 
       saveToStorage('usof_saved_posts', state.savedPosts);
+      state.notification = {
+        id: Date.now(),
+        message: wasSaved
+          ? 'Питання видалено зі збережених'
+          : 'Питання додано до збережених!',
+        type: 'success',
+      };
     },
   },
   extraReducers: (builder) => {
@@ -1578,6 +1605,16 @@ const postsSlice = createSlice({
           state.postLikesMap[postId] = serverScore;
           state.postVoteFromServer[postId] = true;
         }
+        state.notification = {
+          id: Date.now(),
+          message:
+            nextVote === 'like'
+              ? 'Вподобайку поставлено!'
+              : nextVote === 'dislike'
+              ? 'Дизлайк поставлено'
+              : 'Голос скасовано',
+          type: 'success',
+        };
       })
       .addCase(voteComment.fulfilled, (state, action) => {
         const { commentId, nextVote, serverScore } = action.payload;
@@ -1592,6 +1629,37 @@ const postsSlice = createSlice({
           state.commentLikesMap[commentId] = serverScore;
           state.commentVoteFromServer[commentId] = true;
         }
+        state.notification = {
+          id: Date.now(),
+          message:
+            nextVote === 'like'
+              ? 'Коментар вподобано!'
+              : nextVote === 'dislike'
+              ? 'Оцінку збережено'
+              : 'Оцінку коментаря скасовано',
+          type: 'success',
+        };
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.notification = {
+          id: Date.now(),
+          message: 'Ви вийшли з акаунту',
+          type: 'success',
+        };
+      })
+      .addCase(updateUserProfile.fulfilled, (state) => {
+        state.notification = {
+          id: Date.now(),
+          message: 'Профіль успішно оновлено!',
+          type: 'success',
+        };
+      })
+      .addCase(uploadUserAvatar.fulfilled, (state) => {
+        state.notification = {
+          id: Date.now(),
+          message: 'Фото профілю успішно оновлено!',
+          type: 'success',
+        };
       });
   },
 });
