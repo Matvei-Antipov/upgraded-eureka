@@ -180,6 +180,8 @@
 
 .profile-input,
 .profile-select {
+  width: 100%;
+  min-width: 0;
   height: 40px;
   padding: 0 12px;
   border: 1px solid #d1d5db;
@@ -270,11 +272,11 @@
 }
 
 .categories-grid-form {
-  grid-template-columns: 1fr 1.4fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
 }
 
 .users-grid-form {
-  grid-template-columns: 1fr 1.2fr 1fr 1fr 100px auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .profile-readonly-info {
