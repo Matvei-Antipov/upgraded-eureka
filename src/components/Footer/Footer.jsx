@@ -5,15 +5,14 @@ import {
   setCategoryId,
   closePostPage,
   openAskModal,
-  showNotification,
 } from '../../store/postsSlice';
-import { closeProfilePage, openAuthModal } from '../../store/authSlice';
+import { closeProfilePage } from '../../store/authSlice';
 import { translations } from '../../i18n/translations';
 import './Footer.css';
 
 const Footer = () => {
   const dispatch = useDispatch();
-  const { language, user } = useSelector((state) => state.auth);
+  const { language } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
 
   const handleNav = (mode) => {
@@ -25,11 +24,6 @@ const Footer = () => {
   };
 
   const handleAsk = () => {
-    if (!user) {
-      dispatch(showNotification({ message: t.authRequiredToast }));
-      dispatch(openAuthModal('login'));
-      return;
-    }
     dispatch(openAskModal(null));
   };
 

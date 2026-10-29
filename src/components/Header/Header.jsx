@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   logoutUser,
@@ -20,8 +20,13 @@ const Header = () => {
   const dispatch = useDispatch();
   const { user, avatarUrl, language } = useSelector((state) => state.auth);
   const { searchQuery } = useSelector((state) => state.posts);
+  const [imgError, setImgError] = useState(false);
 
   const t = translations[language] || translations.uk;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl, user]);
 
   const handleLogoClick = () => {
     dispatch(closeProfilePage());
@@ -38,6 +43,13 @@ const Header = () => {
     }
     return name.slice(0, 2).toUpperCase();
   };
+
+  const isValidAvatar =
+    avatarUrl &&
+    !imgError &&
+    !avatarUrl.endsWith('default.png') &&
+    avatarUrl !== 'null' &&
+    avatarUrl !== 'undefined';
 
   return (
     <header className="header">
@@ -125,11 +137,12 @@ const Header = () => {
                   </span>
                 </div>
                 <div className="user-avatar">
-                  {avatarUrl ? (
+                  {isValidAvatar ? (
                     <img
                       src={avatarUrl}
                       alt={user.login || 'avatar'}
                       className="user-avatar-img"
+                      onError={() => setImgError(true)}
                     />
                   ) : (
                     <span>{getInitials(user.login || user.full_name)}</span>

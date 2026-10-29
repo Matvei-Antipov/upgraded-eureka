@@ -18,22 +18,38 @@ const saveStorage = (key, value) => {
   }
 };
 
+const isRealPicture = (pic) => {
+  if (!pic || typeof pic !== 'string') return false;
+  const trimmed = pic.trim();
+  if (
+    !trimmed ||
+    trimmed === 'default.png' ||
+    trimmed.endsWith('/default.png') ||
+    trimmed === 'null' ||
+    trimmed === 'undefined'
+  ) {
+    return false;
+  }
+  return true;
+};
+
 const getSavedAvatarForUser = (userObj) => {
   if (!userObj) return null;
   const map = loadStorage('usof_avatars_by_user', {});
   const uid = userObj.id || userObj.userId;
-  if (uid && map[`id_${uid}`]) return map[`id_${uid}`];
-  if (userObj.login && map[`login_${userObj.login}`]) {
+  if (uid && isRealPicture(map[`id_${uid}`])) return map[`id_${uid}`];
+  if (userObj.login && isRealPicture(map[`login_${userObj.login}`])) {
     return map[`login_${userObj.login}`];
   }
-  if (userObj.profile_picture) {
-    return userObj.profile_picture.startsWith('http') ||
+  if (isRealPicture(userObj.profile_picture)) {
+    if (
       userObj.profile_picture.startsWith('data:') ||
-      userObj.profile_picture.startsWith('/')
-      ? userObj.profile_picture
-      : `/uploads/${userObj.profile_picture}`;
+      userObj.profile_picture.startsWith('http')
+    ) {
+      return userObj.profile_picture;
+    }
   }
-  return localStorage.getItem('usof_avatar') || null;
+  return null;
 };
 
 const saveAvatarForUser = (userObj, dataUrl) => {
@@ -52,13 +68,23 @@ const applyUserOverrides = (rawUser) => {
   const uid = rawUser.id || rawUser.userId;
   const overridesById = loadStorage('usof_user_overrides_by_id', {});
   const ov = uid ? overridesById[String(uid)] : null;
-  if (!ov) return rawUser;
+  const cleanedPic = isRealPicture(rawUser.profile_picture)
+    ? rawUser.profile_picture
+    : null;
+
+  if (!ov) {
+    return {
+      ...rawUser,
+      profile_picture: cleanedPic,
+    };
+  }
   return {
     ...rawUser,
     login: ov.login || rawUser.login,
     full_name: ov.full_name ?? rawUser.full_name,
     email: ov.email || rawUser.email,
     role: ov.role || rawUser.role,
+    profile_picture: cleanedPic,
     dbLogin: rawUser.login,
   };
 };
@@ -100,7 +126,7 @@ export const verifySession = createAsyncThunk(
     const { token, user } = getState().auth;
     if (!token || !user) return null;
     const uid = user.id || user.userId;
-    if (!uid) return user;
+    if (!uid) return applyUserOverrides(user);
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const response = await axios.get(`/api/users/${uid}`, { headers });
@@ -109,7 +135,7 @@ export const verifySession = createAsyncThunk(
       if (error.response?.status === 401) {
         dispatch(clearInvalidSession());
       }
-      return user;
+      return applyUserOverrides(user);
     }
   }
 );
@@ -134,7 +160,6 @@ export const loginUser = createAsyncThunk(
     let resolvedEmail = rawIdentifier;
     let matchedUserFromList = null;
 
-    // 1. Ищем пользователя в /api/users, чтобы вход работал и по логину (snake1111), и по email (snake126@gmail.com)
     try {
       const usersRes = await axios.get('/api/users');
       const usersList = Array.isArray(usersRes.data)
@@ -163,10 +188,9 @@ export const loginUser = createAsyncThunk(
         resolvedEmail = matchedUserFromList.email || rawIdentifier;
       }
     } catch {
-      // Игнорируем ошибку предзагрузки списка пользователей
+      // Ignore
     }
 
-    // 2. Пробуем авторизоваться на бэкенде с найденными login и email
     const loginAttempts = [
       { login: resolvedLogin, email: resolvedEmail, password },
       { login: rawIdentifier, email: rawIdentifier, password },
@@ -181,9 +205,9 @@ export const loginUser = createAsyncThunk(
           response.data?.accessToken ||
           `jwt-${Date.now()}`;
         let loggedUser =
-          response.data?.user || matchedUserFromList || { login: resolvedLogin };
+          response.data?.user ||
+          matchedUserFromList || { login: resolvedLogin };
 
-        // Если сервер вернул только токен без объекта user, декодируем JWT payload или берём из /api/users
         if (!loggedUser.id && token.includes('.')) {
           try {
             const base64Payload = token.split('.')[1];
@@ -195,7 +219,7 @@ export const loginUser = createAsyncThunk(
               role: decoded.role || loggedUser.role || 'user',
             };
           } catch {
-            // Ignore decode error
+            // Ignore
           }
         }
 
@@ -251,7 +275,6 @@ export const registerUser = createAsyncThunk(
         password_confirmation: passwordConfirmation,
       });
 
-      // Сразу выполняем вход после успешной регистрации
       const loginResult = await dispatch(
         loginUser({
           loginOrEmail: login,
@@ -286,7 +309,7 @@ export const logoutUser = createAsyncThunk(
         );
       }
     } catch {
-      // Всегда очищаем локальную сессию
+      // Ignore
     }
     return true;
   }
@@ -379,7 +402,7 @@ export const updateUserProfile = createAsyncThunk(
         { headers }
       );
     } catch {
-      // Сохранено в локальном оверрайде, если бэкенд запрещает смену логина
+      // Saved in local override
     }
 
     return {
@@ -417,22 +440,14 @@ export const uploadUserAvatar = createAsyncThunk(
       try {
         const formData = new FormData();
         formData.append('avatar', file);
-        const res = await axios.patch('/api/users/avatar', formData, {
+        await axios.patch('/api/users/avatar', formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
           },
         });
-        const serverPic =
-          res.data?.profile_picture || res.data?.avatarUrl || null;
-        if (serverPic && !dataUrl) {
-          dataUrl = serverPic.startsWith('/')
-            ? serverPic
-            : `/uploads/${serverPic}`;
-          saveAvatarForUser(user, dataUrl);
-        }
       } catch {
-        // Используем сохранённый dataUrl
+        // Use dataUrl from localStorage
       }
     }
 

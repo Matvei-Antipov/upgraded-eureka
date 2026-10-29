@@ -538,7 +538,6 @@ const PostFeed = () => {
   };
 
   const handleReactionSelect = (postId, reactionObj) => {
-    if (!requireAuth()) return;
     dispatch(toggleReaction({ postId, reactionId: reactionObj.id }));
     setActiveReactionPickerPostId(null);
   };
@@ -638,10 +637,7 @@ const PostFeed = () => {
         <button
           type="button"
           className="ask-btn"
-          onClick={() => {
-            if (!requireAuth()) return;
-            dispatch(openAskModal(null));
-          }}
+          onClick={() => dispatch(openAskModal(null))}
         >
           {t.askQuestionBtn}
         </button>
@@ -1162,7 +1158,9 @@ const PostFeed = () => {
 
                     <button
                       type="button"
-                      className={`bookmark-btn ${isSaved ? 'active saved-glow' : ''}`}
+                      className={`bookmark-btn ${
+                        isSaved ? 'active saved-glow' : ''
+                      }`}
                       onClick={() => handleToggleBookmark(post)}
                     >
                       <span>🔖</span>

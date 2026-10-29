@@ -69,7 +69,7 @@
   flex: 1;
 }
 
-/* Светящаяся цифра количества сохранённых вопросов */
+/* Изумрудно-зелёный светящийся бейдж сохранённых вопросов (без оранжевого) */
 .saved-count-badge {
   display: inline-flex;
   align-items: center;
@@ -87,24 +87,21 @@
 }
 
 .saved-count-badge.has-items {
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
-  color: #ffffff !important;
-  border-color: #f97316;
-  box-shadow: 0 0 12px rgba(249, 115, 22, 0.55),
-    0 2px 6px rgba(234, 88, 12, 0.35);
-  animation: savedBadgeGlow 2s infinite ease-in-out;
+  background-color: #ecfdf5;
+  color: #059669 !important;
+  border: 1px solid #6ee7b7;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+  animation: savedEmeraldPulse 2s infinite ease-in-out;
 }
 
-@keyframes savedBadgeGlow {
+@keyframes savedEmeraldPulse {
   0%,
   100% {
-    box-shadow: 0 0 10px rgba(249, 115, 22, 0.45),
-      0 2px 5px rgba(234, 88, 12, 0.3);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 16px rgba(249, 115, 22, 0.8),
-      0 2px 8px rgba(234, 88, 12, 0.5);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.7);
     transform: scale(1.06);
   }
 }
