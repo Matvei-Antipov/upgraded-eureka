@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
+  closeAuthModal,
+  switchAuthMode,
   loginUser,
   registerUser,
   requestPasswordReset,
   confirmPasswordReset,
-  closeAuthModal,
-  openAuthModal,
+  clearAuthError,
 } from '../../store/authSlice';
-import { showNotification } from '../../store/postsSlice';
 import { translations } from '../../i18n/translations';
 import './AuthModal.css';
 
@@ -17,194 +17,169 @@ const AuthModal = () => {
   const {
     isAuthModalOpen,
     authModalMode,
-    status,
+    loading,
     error,
-    resetToken,
-    language,
+    registrationSuccess,
+    resetSuccessMessage,
   } = useSelector((state) => state.auth);
+  const currentLanguage = useSelector((state) => state.posts?.language || 'uk');
+  const t = translations[currentLanguage] || translations.uk;
 
-  const t = translations[language] || translations.uk;
-
-  const [mode, setMode] = useState('login');
+  const [identifier, setIdentifier] = useState('');
   const [login, setLogin] = useState('');
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [localError, setLocalError] = useState('');
+  const [validationError, setValidationError] = useState('');
+
+  // Защита от закрытия модального окна при выделении текста мышкой внутри инпутов
+  const backdropMouseDownRef = useRef(false);
 
   useEffect(() => {
-    if (authModalMode) {
-      setMode(authModalMode);
-    }
-    setLocalError('');
-  }, [authModalMode, isAuthModalOpen]);
-
-  useEffect(() => {
-    if (resetToken) {
-      setTokenInput(resetToken);
-      setMode('reset-confirm');
-    }
-  }, [resetToken]);
+    setValidationError('');
+    dispatch(clearAuthError());
+  }, [authModalMode, isAuthModalOpen, dispatch]);
 
   if (!isAuthModalOpen) return null;
 
-  const switchMode = (nextMode) => {
-    setMode(nextMode);
-    setLocalError('');
-    dispatch(openAuthModal(nextMode));
+  const handleBackdropMouseDown = (e) => {
+    backdropMouseDownRef.current = e.target === e.currentTarget;
   };
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setLocalError('');
-
-    const cleanIdentifier = login.trim();
-    if (!cleanIdentifier || !password) {
-      setLocalError(t.fillAllFieldsError);
-      return;
-    }
-
-    try {
-      await dispatch(
-        loginUser({
-          loginOrEmail: cleanIdentifier,
-          identifier: cleanIdentifier,
-          login: cleanIdentifier,
-          email: cleanIdentifier,
-          password,
-        })
-      ).unwrap();
-
-      dispatch(
-        showNotification({
-          message: t.loginSuccessToast,
-          type: 'success',
-        })
-      );
+  const handleBackdropMouseUp = (e) => {
+    if (backdropMouseDownRef.current && e.target === e.currentTarget) {
       dispatch(closeAuthModal());
-    } catch (err) {
-      setLocalError(typeof err === 'string' ? err : t.loginFailedError);
     }
+    backdropMouseDownRef.current = false;
   };
 
-  const handleRegisterSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLocalError('');
+    setValidationError('');
 
-    if (!login.trim() || !email.trim() || !password) {
-      setLocalError(t.fillAllFieldsError);
-      return;
-    }
-
-    if (password.length < 6) {
-      setLocalError(t.passwordTooShortError);
-      return;
-    }
-
-    if (passwordConfirm && password !== passwordConfirm) {
-      setLocalError(t.passwordsDoNotMatchError);
-      return;
-    }
-
-    try {
-      await dispatch(
-        registerUser({
-          login: login.trim(),
-          full_name: fullName.trim() || login.trim(),
-          fullName: fullName.trim() || login.trim(),
-          email: email.trim(),
-          password,
-          password_confirmation: passwordConfirm || password,
-          passwordConfirm: passwordConfirm || password,
-        })
-      ).unwrap();
-
-      dispatch(
-        showNotification({
-          message: t.registerSuccessToast,
-          type: 'success',
-        })
-      );
-      dispatch(closeAuthModal());
-    } catch (err) {
-      setLocalError(typeof err === 'string' ? err : t.registerFailedError);
-    }
-  };
-
-  const handleRequestReset = async (e) => {
-    e.preventDefault();
-    setLocalError('');
-
-    if (!email.trim()) {
-      setLocalError(t.enterEmailError);
-      return;
-    }
-
-    try {
-      const res = await dispatch(requestPasswordReset(email.trim())).unwrap();
-      if (res?.resetToken) {
-        setTokenInput(res.resetToken);
+    if (authModalMode === 'login') {
+      if (!identifier.trim()) {
+        setValidationError(
+          currentLanguage === 'en' ? 'Enter your login or email' : 'Введіть логін або email'
+        );
+        return;
+      }
+      if (!password || password.length < 4) {
+        setValidationError(
+          currentLanguage === 'en'
+            ? 'Password must be at least 4 characters'
+            : 'Пароль має містити щонайменше 4 символи'
+        );
+        return;
       }
       dispatch(
-        showNotification({
-          message: t.resetLinkSentToast,
-          type: 'success',
+        loginUser({
+          identifier: identifier.trim(),
+          login: identifier.trim(),
+          email: identifier.trim(),
+          password,
         })
       );
-      setMode('reset-confirm');
-    } catch (err) {
-      setLocalError(typeof err === 'string' ? err : t.resetRequestFailedError);
-    }
-  };
-
-  const handleConfirmReset = async (e) => {
-    e.preventDefault();
-    setLocalError('');
-
-    if (!tokenInput.trim() || !newPassword) {
-      setLocalError(t.fillAllFieldsError);
-      return;
-    }
-
-    try {
-      await dispatch(
-        confirmPasswordReset({
-          token: tokenInput.trim(),
-          newPassword,
-        })
-      ).unwrap();
-
+    } else if (authModalMode === 'register') {
+      if (login.trim().length < 3) {
+        setValidationError(
+          currentLanguage === 'en'
+            ? 'Login must be at least 3 characters'
+            : 'Логін має містити щонайменше 3 символи'
+        );
+        return;
+      }
+      if (!email.includes('@')) {
+        setValidationError(
+          currentLanguage === 'en' ? 'Enter a valid email' : 'Введіть коректний email'
+        );
+        return;
+      }
+      if (password.length < 6) {
+        setValidationError(
+          currentLanguage === 'en'
+            ? 'Password must be at least 6 characters'
+            : 'Пароль має містити щонайменше 6 символів'
+        );
+        return;
+      }
+      if (password !== passwordConfirmation) {
+        setValidationError(
+          currentLanguage === 'en' ? 'Passwords do not match' : 'Паролі не співпадають'
+        );
+        return;
+      }
       dispatch(
-        showNotification({
-          message: t.passwordChangedToast,
-          type: 'success',
+        registerUser({
+          login: login.trim(),
+          email: email.trim(),
+          fullName: fullName.trim() || login.trim(),
+          password,
+          passwordConfirmation,
         })
       );
-      setMode('login');
-    } catch (err) {
-      setLocalError(typeof err === 'string' ? err : t.resetConfirmFailedError);
+    } else if (authModalMode === 'reset') {
+      if (resetToken.trim()) {
+        if (newPassword.length < 6) {
+          setValidationError(
+            currentLanguage === 'en'
+              ? 'New password must be at least 6 characters'
+              : 'Новий пароль має містити щонайменше 6 символів'
+          );
+          return;
+        }
+        dispatch(confirmPasswordReset({ token: resetToken.trim(), newPassword }));
+      } else {
+        if (!email.includes('@')) {
+          setValidationError(
+            currentLanguage === 'en' ? 'Enter your account email' : 'Введіть ваш email'
+          );
+          return;
+        }
+        dispatch(requestPasswordReset({ email: email.trim() }));
+      }
     }
   };
 
   return (
     <div
       className="auth-modal-backdrop"
-      onClick={() => dispatch(closeAuthModal())}
-      role="presentation"
+      onMouseDown={handleBackdropMouseDown}
+      onMouseUp={handleBackdropMouseUp}
+      role="dialog"
+      aria-modal="true"
     >
       <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="auth-modal-header">
-          <h2 className="auth-modal-title">
-            {mode === 'login' && t.authLoginTitle}
-            {mode === 'register' && t.authRegisterTitle}
-            {(mode === 'reset' || mode === 'reset-confirm') && t.authResetTitle}
-          </h2>
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={`auth-tab ${authModalMode === 'login' ? 'active' : ''}`}
+              onClick={() => dispatch(switchAuthMode('login'))}
+            >
+              {currentLanguage === 'en' ? 'Sign In' : 'Вхід'}
+            </button>
+            <button
+              type="button"
+              className={`auth-tab ${authModalMode === 'register' ? 'active' : ''}`}
+              onClick={() => dispatch(switchAuthMode('register'))}
+            >
+              {currentLanguage === 'en' ? 'Sign Up' : 'Реєстрація'}
+            </button>
+            <button
+              type="button"
+              className={`auth-tab ${authModalMode === 'reset' ? 'active' : ''}`}
+              onClick={() => dispatch(switchAuthMode('reset'))}
+            >
+              {currentLanguage === 'en' ? 'Reset Password' : 'Відновлення'}
+            </button>
+          </div>
           <button
             type="button"
-            className="auth-modal-close"
+            className="auth-close-btn"
             onClick={() => dispatch(closeAuthModal())}
             aria-label="Close"
           >
@@ -212,221 +187,203 @@ const AuthModal = () => {
           </button>
         </div>
 
-        {(mode === 'login' || mode === 'register') && (
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={`auth-tab-btn ${mode === 'login' ? 'active' : ''}`}
-              onClick={() => switchMode('login')}
-            >
-              {t.loginBtn}
-            </button>
-            <button
-              type="button"
-              className={`auth-tab-btn ${mode === 'register' ? 'active' : ''}`}
-              onClick={() => switchMode('register')}
-            >
-              {t.registerBtn}
-            </button>
-          </div>
-        )}
-
-        {(localError || error) && (
-          <div className="auth-error-banner">{localError || error}</div>
-        )}
-
-        {mode === 'login' && (
-          <form className="auth-form" onSubmit={handleLoginSubmit}>
-            <div className="auth-field">
-              <label className="auth-label">{t.loginOrEmailLabel}</label>
-              <input
-                type="text"
-                className="auth-input"
-                placeholder={t.loginInputPlaceholder}
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                required
-              />
+        <form className="auth-modal-form" onSubmit={handleSubmit} noValidate>
+          {registrationSuccess && (
+            <div className="auth-alert success">
+              {currentLanguage === 'en'
+                ? 'Registration successful! You can now sign in with your login or email.'
+                : 'Реєстрація успішна! Тепер ви можете увійти за логіном або email.'}
             </div>
+          )}
 
-            <div className="auth-field">
-              <label className="auth-label">{t.passwordLabel}</label>
-              <input
-                type="password"
-                className="auth-input"
-                placeholder={t.passwordPlaceholder}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+          {resetSuccessMessage && (
+            <div className="auth-alert success">{resetSuccessMessage}</div>
+          )}
 
-            <div className="auth-Reset-row">
-              <button
-                type="button"
-                className="auth-link-btn"
-                onClick={() => switchMode('reset')}
-              >
-                {t.forgotPasswordLink}
-              </button>
-            </div>
+          {(validationError || error) && (
+            <div className="auth-alert error">{validationError || error}</div>
+          )}
 
-            <button
-              type="submit"
-              className="auth-submit-btn"
-              disabled={status === 'loading'}
-            >
-              {status === 'loading' ? t.processingBtn : t.submitLoginBtn}
-            </button>
-          </form>
-        )}
+          {authModalMode === 'login' && (
+            <>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Login or Email' : 'Логін або Email'}
+                </label>
+                <input
+                  type="text"
+                  className="auth-input"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder={
+                    currentLanguage === 'en'
+                      ? 'e.g. admin_usof or admin@usof.com'
+                      : 'Наприклад: admin_usof або admin@usof.com'
+                  }
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
 
-        {mode === 'register' && (
-          <form className="auth-form" onSubmit={handleRegisterSubmit}>
-            <div className="auth-field">
-              <label className="auth-label">{t.loginLabel}</label>
-              <input
-                type="text"
-                className="auth-input"
-                placeholder={t.loginInputPlaceholder}
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                required
-              />
-            </div>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Password' : 'Пароль'}
+                </label>
+                <input
+                  type="password"
+                  className="auth-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+            </>
+          )}
 
-            <div className="auth-field">
-              <label className="auth-label">{t.fullNameLabel}</label>
-              <input
-                type="text"
-                className="auth-input"
-                placeholder={t.fullNamePlaceholder}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
+          {authModalMode === 'register' && (
+            <>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Unique Login *' : 'Унікальний логін *'}
+                </label>
+                <input
+                  type="text"
+                  className="auth-input"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  placeholder="dev_master"
+                  autoComplete="username"
+                />
+              </div>
 
-            <div className="auth-field">
-              <label className="auth-label">{t.emailLabel}</label>
-              <input
-                type="email"
-                className="auth-input"
-                placeholder={t.emailPlaceholder}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Full Name' : "Повне ім'я"}
+                </label>
+                <input
+                  type="text"
+                  className="auth-input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Олександр Коваленко"
+                  autoComplete="name"
+                />
+              </div>
 
-            <div className="auth-field">
-              <label className="auth-label">{t.passwordLabel}</label>
-              <input
-                type="password"
-                className="auth-input"
-                placeholder={t.passwordPlaceholder}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+              <div className="auth-field">
+                <label className="auth-label">Email *</label>
+                <input
+                  type="email"
+                  className="auth-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  autoComplete="email"
+                />
+              </div>
 
-            <div className="auth-field">
-              <label className="auth-label">{t.confirmPasswordLabel}</label>
-              <input
-                type="password"
-                className="auth-input"
-                placeholder={t.confirmPasswordPlaceholder}
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                required
-              />
-            </div>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Password *' : 'Пароль *'}
+                </label>
+                <input
+                  type="password"
+                  className="auth-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Мінімум 6 символів"
+                  autoComplete="new-password"
+                />
+              </div>
 
-            <button
-              type="submit"
-              className="auth-submit-btn"
-              disabled={status === 'loading'}
-            >
-              {status === 'loading' ? t.processingBtn : t.submitRegisterBtn}
-            </button>
-          </form>
-        )}
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en' ? 'Confirm Password *' : 'Підтвердження пароля *'}
+                </label>
+                <input
+                  type="password"
+                  className="auth-input"
+                  value={passwordConfirmation}
+                  onChange={(e) => setPasswordConfirmation(e.target.value)}
+                  placeholder="Повторіть пароль"
+                  autoComplete="new-password"
+                />
+              </div>
+            </>
+          )}
 
-        {mode === 'reset' && (
-          <form className="auth-form" onSubmit={handleRequestReset}>
-            <p className="auth-reset-desc">{t.resetPasswordDesc}</p>
-            <div className="auth-field">
-              <label className="auth-label">{t.emailLabel}</label>
-              <input
-                type="email"
-                className="auth-input"
-                placeholder={t.emailPlaceholder}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+          {authModalMode === 'reset' && (
+            <>
+              <div className="auth-field">
+                <label className="auth-label">Email</label>
+                <input
+                  type="email"
+                  className="auth-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@example.com"
+                />
+              </div>
 
-            <button
-              type="submit"
-              className="auth-submit-btn"
-              disabled={status === 'loading'}
-            >
-              {status === 'loading' ? t.processingBtn : t.sendResetLinkBtn}
-            </button>
+              <div className="auth-field">
+                <label className="auth-label">
+                  {currentLanguage === 'en'
+                    ? 'Confirm Token (if received)'
+                    : 'Токен підтвердження (якщо вже отримали)'}
+                </label>
+                <input
+                  type="text"
+                  className="auth-input"
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                  placeholder={
+                    currentLanguage === 'en'
+                      ? 'Leave blank to request link first'
+                      : 'Залиште порожнім для запиту листа'
+                  }
+                />
+              </div>
 
-            <button
-              type="button"
-              className="auth-link-btn center"
-              onClick={() => switchMode('login')}
-            >
-              {t.backToLoginLink}
-            </button>
-          </form>
-        )}
+              {resetToken.trim() && (
+                <div className="auth-field">
+                  <label className="auth-label">
+                    {currentLanguage === 'en' ? 'New Password' : 'Новий пароль'}
+                  </label>
+                  <input
+                    type="password"
+                    className="auth-input"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Мінімум 6 символів"
+                  />
+                </div>
+              )}
+            </>
+          )}
 
-        {mode === 'reset-confirm' && (
-          <form className="auth-form" onSubmit={handleConfirmReset}>
-            <div className="auth-field">
-              <label className="auth-label">{t.resetTokenLabel}</label>
-              <input
-                type="text"
-                className="auth-input"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="auth-field">
-              <label className="auth-label">{t.newPasswordLabel}</label>
-              <input
-                type="password"
-                className="auth-input"
-                placeholder={t.passwordPlaceholder}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="auth-submit-btn"
-              disabled={status === 'loading'}
-            >
-              {status === 'loading' ? t.processingBtn : t.confirmResetBtn}
-            </button>
-
-            <button
-              type="button"
-              className="auth-link-btn center"
-              onClick={() => switchMode('login')}
-            >
-              {t.backToLoginLink}
-            </button>
-          </form>
-        )}
+          <button type="submit" className="auth-submit-btn" disabled={loading}>
+            {loading
+              ? currentLanguage === 'en'
+                ? 'Please wait...'
+                : 'Зачекайте...'
+              : authModalMode === 'login'
+              ? currentLanguage === 'en'
+                ? 'Sign In'
+                : 'Увійти'
+              : authModalMode === 'register'
+              ? currentLanguage === 'en'
+                ? 'Create Account'
+                : 'Зареєструватися'
+              : resetToken.trim()
+              ? currentLanguage === 'en'
+                ? 'Save New Password'
+                : 'Зберегти новий пароль'
+              : currentLanguage === 'en'
+              ? 'Send Reset Link'
+              : 'Надіслати посилання'}
+          </button>
+        </form>
       </div>
     </div>
   );

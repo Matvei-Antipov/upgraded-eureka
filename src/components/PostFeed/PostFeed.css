@@ -591,12 +591,40 @@
 }
 
 /* Монохромная Ч/Б-серая подсветка сохранённой закладки */
-.bookmark-btn.saved-glow {
+/* Простая статичная кнопка сохранения в закладки без анимации */
+.bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: none;
+  animation: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.bookmark-btn:hover {
   background-color: #f3f4f6;
+  border-color: #9ca3af;
   color: #111827;
-  border-color: #d1d5db;
+}
+
+.bookmark-btn.active,
+.bookmark-btn.saved-glow {
+  background-color: #111827 !important;
+  border-color: #111827 !important;
+  color: #ffffff !important;
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.12);
+  animation: none !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .share-wrapper {

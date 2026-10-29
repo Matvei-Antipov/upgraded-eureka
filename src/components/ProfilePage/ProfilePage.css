@@ -1,280 +1,366 @@
-.profile-page {
-  flex: 1;
-  min-width: 0;
+.profile-page-container {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  color: #111827;
+  padding-bottom: 32px;
 }
 
-.profile-top-bar {
+.profile-top-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
-.back-feed-btn {
+.profile-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
   background-color: #111827;
-  color: #ffffff !important;
+  color: #ffffff;
   border: 1px solid #111827;
-  padding: 8px 16px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.15s ease;
 }
 
-.back-feed-btn:hover {
+.profile-back-btn:hover {
   background-color: #1f2937;
 }
 
-.back-feed-btn.secondary {
+.profile-own-btn {
+  padding: 8px 14px;
   background-color: #ffffff;
-  color: #111827 !important;
-  border: 1px solid #e5e7eb;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.back-feed-btn.secondary:hover {
-  background-color: #f3f4f6;
-}
-
-.profile-card {
+/* Универсальная карточка секции */
+.profile-section-card {
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 24px;
-  display: flex;
-  align-items: flex-start;
-  gap: 28px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-.profile-avatar-section {
+/* Основная карточка пользователя */
+.profile-main-card {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.profile-avatar-column {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  gap: 12px;
 }
 
-.profile-avatar-large {
-  width: 84px;
-  height: 84px;
+.profile-avatar-circle {
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   background-color: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  border: 2px solid #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: #111827;
   overflow: hidden;
 }
 
-.profile-avatar-large img {
+.profile-avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.upload-avatar-label {
+.profile-upload-btn {
+  display: inline-block;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #4b5563;
+  color: #374151;
+  background-color: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   cursor: pointer;
-  text-decoration: underline;
+  text-align: center;
 }
 
-.upload-avatar-label:hover {
+.profile-upload-btn:hover {
+  background-color: #f3f4f6;
   color: #111827;
 }
 
-.profile-info-section {
-  flex: 1;
-  min-width: 0;
+.profile-details-column {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
-.profile-name-row {
+.profile-identity-header {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
-.profile-main-name {
-  font-size: 22px;
-  font-weight: 800;
-  color: #111827;
+.profile-username {
   margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
 }
 
-.profile-role-pill {
-  font-size: 11px;
+.profile-role-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background-color: #f3f4f6;
-  color: #374151;
 }
 
-.profile-role-pill.admin {
+.profile-role-badge.admin {
   background-color: #111827;
   color: #ffffff;
 }
 
-.profile-rating-pill {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background-color: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-}
-
-/* Форма редактирования профиля */
-.profile-edit-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  align-items: end;
-}
-
-.profile-edit-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+.profile-role-badge.user {
+  background-color: #f3f4f6;
   color: #374151;
-}
-
-.profile-edit-form input {
-  width: 100%;
-  background-color: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
-  color: #111827;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.profile-edit-form input:focus {
-  border-color: #111827;
-}
-
-.save-profile-btn {
-  background-color: #111827;
-  color: #ffffff !important;
-  border: 1px solid #111827;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  width: fit-content;
-  transition: background-color 0.15s ease;
-}
-
-.save-profile-btn:hover {
-  background-color: #1f2937;
-}
-
-/* Панель администратора в профиле */
-.admin-categories-panel {
-  background-color: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 24px;
+}
+
+.profile-rating-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background-color: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.profile-edit-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.admin-panel-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-.admin-cat-form {
+.profile-field {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.admin-cat-input {
-  flex: 1;
-  min-width: 160px;
-  background-color: #ffffff;
+.profile-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.profile-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.profile-input,
+.profile-select {
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
+  background-color: #ffffff;
+  font-size: 14px;
   color: #111827;
-  outline: none;
+  box-sizing: border-box;
 }
 
-.admin-cat-input:focus {
+.profile-input:focus,
+.profile-select:focus {
+  outline: none;
   border-color: #111827;
 }
 
-.admin-cat-btn {
+.profile-input.compact,
+.profile-select.compact {
+  height: 34px;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.profile-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-primary-btn {
+  height: 40px;
+  padding: 0 18px;
   background-color: #111827;
-  color: #ffffff !important;
+  color: #ffffff;
   border: 1px solid #111827;
   border-radius: 8px;
-  padding: 9px 16px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.admin-cat-btn:hover {
+.profile-primary-btn:hover {
   background-color: #1f2937;
 }
 
-.admin-cat-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.profile-save-toast {
+  font-size: 13px;
+  font-weight: 600;
+  color: #047857;
 }
 
-.admin-cat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
+/* Заголовки секций */
+.section-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.section-card-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
   color: #111827;
 }
 
-.admin-cat-chip button {
-  background: transparent;
-  border: none;
-  cursor: pointer;
+.section-card-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.section-count-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Формы в админ-панели */
+.admin-bar-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  align-items: center;
+}
+
+.categories-grid-form {
+  grid-template-columns: 1fr 1.4fr auto;
+}
+
+.users-grid-form {
+  grid-template-columns: 1fr 1.2fr 1fr 110px auto;
+}
+
+/* Сетка карточек категорий */
+.admin-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.admin-category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background-color: #f9fafb;
+}
+
+.admin-category-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-category-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.admin-category-desc {
   font-size: 12px;
   color: #6b7280;
-  padding: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.admin-cat-chip button:hover {
+.admin-category-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-icon-btn:hover {
+  border-color: #111827;
   color: #111827;
+}
+
+.admin-icon-btn.danger:hover {
+  background-color: #fef2f2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+.admin-category-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.admin-category-edit-actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* Список пользователей в админке */
@@ -290,55 +376,122 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
-  background-color: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 10px;
+  background-color: #ffffff;
 }
 
-.admin-user-actions {
+.admin-user-row:hover {
+  background-color: #f9fafb;
+}
+
+.admin-user-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  flex-shrink: 0;
+}
+
+.admin-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-user-login {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.admin-user-email {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.admin-user-controls {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.admin-role-select {
-  background-color: #ffffff;
+.admin-action-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.admin-delete-user-btn {
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
-  padding: 5px 10px;
-  border-radius: 6px;
+  background-color: #ffffff;
+  color: #374151;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.admin-delete-user-btn:hover {
+.admin-action-btn.save {
+  background-color: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
+.admin-delete-user-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-delete-user-btn:hover:not(:disabled) {
   background-color: #fee2e2;
+  border-color: #f87171;
 }
 
-/* Список вопросов пользователя в профиле */
-.profile-posts-section {
+.admin-delete-user-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Панель фильтрации и сортировки постов в профиле */
+.profile-posts-toolbar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 
-.profile-section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
+.profile-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
 }
 
 .profile-posts-list {
@@ -347,50 +500,95 @@
   gap: 10px;
 }
 
-.profile-post-card {
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 14px 18px;
+.profile-post-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background-color: #ffffff;
 }
 
-.profile-post-card:hover {
+.profile-post-item:hover {
   border-color: #9ca3af;
-  background-color: #f9fafb;
+}
+
+.profile-post-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.profile-post-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-post-status {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.profile-post-status.active {
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+.profile-post-status.inactive {
+  background-color: #f3f4f6;
+  color: #6b7280;
 }
 
 .profile-post-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
-  margin: 0;
 }
 
-.profile-post-stats {
+.profile-post-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-size: 12px;
   color: #6b7280;
-  white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .profile-card {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .profile-name-row {
-    justify-content: center;
-  }
-  .profile-edit-form {
+.profile-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-empty-posts {
+  padding: 28px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .profile-main-card {
     grid-template-columns: 1fr;
+  }
+
+  .profile-form-grid,
+  .categories-grid-form,
+  .users-grid-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-row,
+  .profile-post-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

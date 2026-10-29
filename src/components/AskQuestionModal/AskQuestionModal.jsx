@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   closeAskModal,
@@ -22,6 +22,8 @@ const AskQuestionModal = () => {
   const [localError, setLocalError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const overlayMouseDownRef = useRef(false);
+
   useEffect(() => {
     setLocalError('');
     if (editingPost) {
@@ -43,6 +45,17 @@ const AskQuestionModal = () => {
   }, [editingPost, categories, isAskModalOpen]);
 
   if (!isAskModalOpen) return null;
+
+  const handleOverlayMouseDown = (e) => {
+    overlayMouseDownRef.current = e.target === e.currentTarget;
+  };
+
+  const handleOverlayMouseUp = (e) => {
+    if (overlayMouseDownRef.current && e.target === e.currentTarget) {
+      dispatch(closeAskModal());
+    }
+    overlayMouseDownRef.current = false;
+  };
 
   const handleCategoryToggle = (catId) => {
     const numId = Number(catId);
@@ -110,9 +123,11 @@ const AskQuestionModal = () => {
 
   return (
     <div
-      className="modal-backdrop"
-      onClick={() => dispatch(closeAskModal())}
-      role="presentation"
+      className="modal-overlay"
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
+      role="dialog"
+      aria-modal="true"
     >
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
