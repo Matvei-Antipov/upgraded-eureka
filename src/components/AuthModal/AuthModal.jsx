@@ -103,6 +103,7 @@ const AuthModal = () => {
         setValidationError(t.passwordsDoNotMatchError);
         return;
       }
+      setIdentifier(login.trim());
       dispatch(
         registerUser({
           login: login.trim(),
@@ -122,8 +123,11 @@ const AuthModal = () => {
           setValidationError(t.passwordsDoNotMatchError);
           return;
         }
+        const rawToken = resetToken.trim();
+        const urlMatch = rawToken.match(/password-reset\/([a-zA-Z0-9_-]+)/);
+        const cleanToken = urlMatch ? urlMatch[1] : rawToken;
         dispatch(
-          confirmPasswordReset({ token: resetToken.trim(), newPassword })
+          confirmPasswordReset({ token: cleanToken, newPassword })
         );
       } else {
         if (!EMAIL_RE.test(email.trim())) {

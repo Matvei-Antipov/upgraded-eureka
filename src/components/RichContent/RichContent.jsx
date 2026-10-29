@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { translations } from '../../i18n/translations';
+import { PREVIEW_LENGTH } from '../../config';
 
 /**
  * Shared renderer for post and comment bodies:
@@ -43,6 +44,9 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
     segments.push({ type: 'text', content: text.slice(lastIndex) });
   }
 
+  let shownImageInCompact = false;
+  let remainingChars = PREVIEW_LENGTH;
+
   const renderTextWithImagesAndInlineCode = (rawStr, parentKey) => {
     const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
     const parts = [];
@@ -69,6 +73,8 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
 
     return parts.map((p, idx) => {
       if (p.kind === 'img') {
+        if (compact && shownImageInCompact) return null;
+        shownImageInCompact = true;
         return (
           <div
             key={`${parentKey}-img-${idx}`}
@@ -80,7 +86,18 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
         );
       }
 
-      const inlineParts = p.val.split(/(`[^`]+`)/g);
+      let rawVal = p.val;
+      if (compact) {
+        if (remainingChars <= 0) return null;
+        if (rawVal.length > remainingChars) {
+          rawVal = `${rawVal.slice(0, remainingChars).trimEnd()}…`;
+          remainingChars = 0;
+        } else {
+          remainingChars -= rawVal.length;
+        }
+      }
+
+      const inlineParts = rawVal.split(/(`[^`]+`)/g);
       return (
         <span key={`${parentKey}-txt-${idx}`} className="rich-text-span">
           {inlineParts.map((token, tIdx) => {
@@ -98,10 +115,17 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
     });
   };
 
+  const renderedSegments = compact ? segments.slice(0, 3) : segments;
+
   return (
     <div className={`rich-content-body ${compact ? 'compact-preview' : ''}`}>
-      {segments.map((seg, i) => {
+      {renderedSegments.map((seg, i) => {
         if (seg.type === 'code') {
+          const codeLines = seg.content.split('\n');
+          const previewCode =
+            compact && codeLines.length > 6
+              ? `${codeLines.slice(0, 6).join('\n')}\n// ...`
+              : seg.content;
           return (
             <div
               key={`code-${i}`}
@@ -119,7 +143,7 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
                 </button>
               </div>
               <pre className="rich-code-pre">
-                <code>{seg.content}</code>
+                <code>{previewCode}</code>
               </pre>
             </div>
           );

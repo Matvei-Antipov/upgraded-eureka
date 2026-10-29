@@ -4,6 +4,7 @@ import {
   closeProfilePage,
   openProfilePage,
   openUserProfile,
+  fetchUserById,
   updateUserProfile,
   uploadUserAvatar,
   fetchAllUsers,
@@ -27,7 +28,12 @@ import {
   MAX_AVATAR_SIZE_MB,
   ALLOWED_IMAGE_TYPES,
 } from '../../config';
-import { avatarUrl, getInitials, formatDate } from '../../utils/format';
+import {
+  avatarUrl,
+  getInitials,
+  formatDate,
+  computeUserRating,
+} from '../../utils/format';
 import './ProfilePage.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -40,12 +46,13 @@ const ProfilePage = () => {
     allUsers = [],
     language: authLang,
   } = useSelector((state) => state.auth);
+  const postsState = useSelector((state) => state.posts);
   const {
     items: posts = [],
     categories = [],
     previewCategoriesByPost = {},
     postLikesMap = {},
-  } = useSelector((state) => state.posts);
+  } = postsState;
 
   const language = authLang || 'uk';
   const t = translations[language] || translations.uk;
@@ -93,8 +100,11 @@ const ProfilePage = () => {
     if (targetUser) {
       setFullName(targetUser.full_name || targetUser.login || '');
       setEmail(targetUser.email || '');
+      if (targetUser.id && !targetUser.email) {
+        dispatch(fetchUserById(targetUser.id));
+      }
     }
-  }, [targetUser]);
+  }, [targetUser, dispatch]);
 
   useEffect(() => {
     if (isAdmin && isOwnProfile) {
@@ -336,6 +346,11 @@ const ProfilePage = () => {
 
   const resolvedAvatar = !avatarFailed ? avatarUrl(targetUser) : null;
   const visibleUserPosts = userPosts.slice(0, visiblePostsCount);
+  const targetUserRating = computeUserRating(
+    targetUser.id,
+    postsState,
+    targetUser.rating
+  );
 
   return (
     <div className="profile-page-container">
@@ -396,8 +411,11 @@ const ProfilePage = () => {
             >
               {targetUser.role === 'admin' ? t.roleAdmin : t.roleUser}
             </span>
-            <span className="profile-rating-pill">
-              ★ {t.userRatingLabel} {targetUser.rating ?? 0}
+            <span
+              className="profile-rating-pill"
+              title={t.ratingBreakdownHint}
+            >
+              ★ {t.userRatingLabel} {targetUserRating.total}
             </span>
           </div>
 
@@ -700,6 +718,7 @@ const ProfilePage = () => {
             ) : (
               filteredAdminUsers.map((u) => {
                 const uAvatar = avatarUrl(u);
+                const uRating = computeUserRating(u.id, postsState, u.rating);
                 return (
                   <div key={u.id} className="admin-user-row">
                     <div
@@ -725,6 +744,12 @@ const ProfilePage = () => {
                     </div>
 
                     <div className="admin-user-controls">
+                      <span
+                        className="profile-rating-pill"
+                        title={t.ratingBreakdownHint}
+                      >
+                        ★ {uRating.total}
+                      </span>
                       <span
                         className={`profile-role-badge ${
                           u.role === 'admin' ? 'admin' : 'user'

@@ -284,6 +284,11 @@ export const translations = {
       'Ця публікація деактивована адміністратором і прихована від перегляду.',
     inactivePostNoCommentsNote:
       'Це питання деактивовано — додавання нових коментарів вимкнено.',
+    votesListBtnTitle: 'Переглянути усі оцінки',
+    votesListEmpty: 'Ще немає оцінок',
+    removeUserVoteBtn: 'Скасувати оцінку користувача (Admin)',
+    ratingBreakdownHint:
+      'Сума лайків/дизлайків за публікації та коментарі + бонус за реакції спільноти',
   },
 
   en: {
@@ -571,6 +576,11 @@ export const translations = {
       'This publication has been deactivated by an administrator and is hidden.',
     inactivePostNoCommentsNote:
       'This question is inactive — posting new comments is disabled.',
+    votesListBtnTitle: 'View all votes',
+    votesListEmpty: 'No votes yet',
+    removeUserVoteBtn: 'Remove user vote (Admin)',
+    ratingBreakdownHint:
+      'Net likes/dislikes on posts and comments + community reaction bonus',
   },
 };
 

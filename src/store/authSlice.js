@@ -103,7 +103,10 @@ export const fetchUserById = createAsyncThunk(
       if (!userId) return false;
       const key = String(userId);
       const existing = getState().auth.usersMap[key];
-      if (existing || pendingUserRequests.has(key)) {
+      if (
+        (existing && (existing.email || existing._notFound)) ||
+        pendingUserRequests.has(key)
+      ) {
         return false;
       }
       pendingUserRequests.add(key);
@@ -134,7 +137,29 @@ export const loginUser = createAsyncThunk(
       localStorage.setItem(TOKEN_KEY, token);
 
       const profileRes = await api.get(`/users/${jwtPayload.userId}`);
-      const userObj = profileRes.data;
+      let userObj = profileRes.data;
+
+      if (userObj?.login) {
+        try {
+          const pendingKey = `usof_pending_fullname_${userObj.login.toLowerCase()}`;
+          const pendingFullName = sessionStorage.getItem(pendingKey);
+          if (
+            pendingFullName &&
+            (!userObj.full_name || userObj.full_name === userObj.login)
+          ) {
+            await api.patch(`/users/${userObj.id}`, {
+              full_name: pendingFullName,
+              email: userObj.email,
+            });
+            userObj = { ...userObj, full_name: pendingFullName };
+          }
+          if (pendingFullName) {
+            sessionStorage.removeItem(pendingKey);
+          }
+        } catch {
+          // ignore optional full_name sync error
+        }
+      }
 
       saveCachedUser(userObj);
       return { token, user: userObj };
@@ -399,10 +424,15 @@ const authSlice = createSlice({
       state.isProfileOpen = true;
       const payload = action.payload;
       if (payload && typeof payload === 'object') {
-        state.viewedProfileUser = payload;
-        if (payload.id) {
+        const existing = payload.id
+          ? state.usersMap[String(payload.id)]
+          : null;
+        state.viewedProfileUser = existing && !existing._notFound
+          ? { ...payload, ...existing }
+          : payload;
+        if (payload.id && payload.email) {
           state.usersMap[String(payload.id)] = {
-            ...(state.usersMap[String(payload.id)] || {}),
+            ...(existing || {}),
             ...payload,
           };
         }

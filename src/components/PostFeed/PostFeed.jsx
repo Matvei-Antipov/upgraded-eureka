@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   fetchPosts,
   fetchCategories,
+  fetchCategoryById,
   fetchPostPreviewComments,
   setSortBy,
   setOrder,
@@ -82,6 +83,12 @@ const PostFeed = () => {
   useEffect(() => {
     dispatch(fetchCategories());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (categoryId) {
+      dispatch(fetchCategoryById(categoryId));
+    }
+  }, [categoryId, dispatch]);
 
   useEffect(() => {
     dispatch(fetchPosts());
@@ -390,7 +397,11 @@ const PostFeed = () => {
               : t.communityQuestions}
           </h1>
           <p className="feed-subtitle">
-            {viewMode === 'saved' ? t.savedSubtitle : t.communitySubtitle}
+            {viewMode === 'saved'
+              ? t.savedSubtitle
+              : activeCategoryObj?.description
+              ? activeCategoryObj.description
+              : t.communitySubtitle}
           </p>
         </div>
 

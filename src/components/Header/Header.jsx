@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   setSearchQuery,
@@ -25,6 +25,10 @@ const Header = () => {
   );
   const t = translations[language] || translations.uk;
   const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [user?.profile_picture, user?.id]);
 
   const handleLogoClick = () => {
     dispatch(closeProfilePage());

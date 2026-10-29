@@ -163,6 +163,53 @@
   box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.12);
 }
 
+.votes-popover-wrap {
+  position: relative;
+}
+
+.votes-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  max-height: 220px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  z-index: 25;
+}
+
+.votes-popover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #111827;
+  border-radius: 6px;
+}
+
+.votes-popover-row:hover {
+  background-color: #f3f4f6;
+}
+
+.vote-remove-admin-btn {
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
 @media (max-width: 768px) {
   .post-full-card,
   .comments-section-card {

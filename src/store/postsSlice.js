@@ -48,10 +48,10 @@ const pendingPreviewIds = new Set();
 
 const parseLikesResponse = (likesData, currentUserId) => {
   if (typeof likesData === 'number') {
-    return { score: likesData, myVote: null };
+    return { score: likesData, myVote: null, list: [] };
   }
   if (!Array.isArray(likesData)) {
-    return { score: null, myVote: null };
+    return { score: null, myVote: null, list: [] };
   }
   let myVote = null;
   const score = likesData.reduce((acc, item) => {
@@ -65,7 +65,7 @@ const parseLikesResponse = (likesData, currentUserId) => {
     return isDislike ? acc - 1 : acc + 1;
   }, 0);
 
-  return { score, myVote };
+  return { score, myVote, list: likesData };
 };
 
 export const checkApiHealth = createAsyncThunk('posts/checkApiHealth', async () => {
@@ -140,6 +140,32 @@ export const fetchCategories = createAsyncThunk(
     try {
       const response = await api.get('/categories');
       return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    }
+  }
+);
+
+export const fetchCategoryById = createAsyncThunk(
+  'posts/fetchCategoryById',
+  async (categoryId, { rejectWithValue }) => {
+    if (!categoryId) return null;
+    try {
+      const response = await api.get(`/categories/${categoryId}`);
+      return response.data || null;
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    }
+  }
+);
+
+export const fetchCommentById = createAsyncThunk(
+  'posts/fetchCommentById',
+  async (commentId, { rejectWithValue }) => {
+    if (!commentId) return null;
+    try {
+      const response = await api.get(`/comments/${commentId}`);
+      return response.data || null;
     } catch (error) {
       return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
@@ -224,12 +250,40 @@ export const fetchPostPreviewComments = createAsyncThunk(
 
       const comments = Array.isArray(commentsRes.data) ? commentsRes.data : [];
       const categories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
-      const { score: likesScore, myVote } = parseLikesResponse(
-        likesRes.data,
-        currentUserId
+      const {
+        score: likesScore,
+        myVote,
+        list: likesList,
+      } = parseLikesResponse(likesRes.data, currentUserId);
+
+      const commentLikesScores = {};
+      const commentMyVotes = {};
+      await Promise.all(
+        comments.slice(0, 10).map(async (c) => {
+          if (!c?.id) return;
+          try {
+            const cLikeRes = await api.get(`/comments/${c.id}/like`);
+            const parsed = parseLikesResponse(cLikeRes.data, currentUserId);
+            if (parsed.score !== null) {
+              commentLikesScores[c.id] = parsed.score;
+            }
+            commentMyVotes[c.id] = parsed.myVote || null;
+          } catch {
+            // ignore preview comment like fetch error
+          }
+        })
       );
 
-      return { postId, comments, categories, likesScore, myVote };
+      return {
+        postId,
+        comments,
+        categories,
+        likesScore,
+        myVote,
+        likesList,
+        commentLikesScores,
+        commentMyVotes,
+      };
     } finally {
       pendingPreviewIds.delete(String(postId));
     }
@@ -257,20 +311,22 @@ const loadFullPostBundle = async (postId, currentUserId) => {
   ]);
 
   const comments = Array.isArray(commentsRes.data) ? commentsRes.data : [];
-  const { score: postLikesScore, myVote: myPostVote } = parseLikesResponse(
-    postLikesRes.data,
-    currentUserId
-  );
+  const {
+    score: postLikesScore,
+    myVote: myPostVote,
+    list: postLikesList,
+  } = parseLikesResponse(postLikesRes.data, currentUserId);
 
   const commentLikesScores = {};
   const commentMyVotes = {};
+  const commentLikesLists = {};
 
   await Promise.all(
     comments.map(async (c) => {
       if (!c.id) return;
       try {
         const cLikeRes = await api.get(`/comments/${c.id}/like`);
-        const { score, myVote } = parseLikesResponse(
+        const { score, myVote, list } = parseLikesResponse(
           cLikeRes.data,
           currentUserId
         );
@@ -278,6 +334,7 @@ const loadFullPostBundle = async (postId, currentUserId) => {
           commentLikesScores[c.id] = score;
         }
         commentMyVotes[c.id] = myVote || null;
+        commentLikesLists[c.id] = list;
       } catch {
         // Ignore single comment like error
       }
@@ -290,8 +347,10 @@ const loadFullPostBundle = async (postId, currentUserId) => {
     comments,
     postLikesScore,
     myPostVote,
+    postLikesList,
     commentLikesScores,
     commentMyVotes,
+    commentLikesLists,
   };
 };
 
@@ -628,6 +687,7 @@ export const votePost = createAsyncThunk(
         postId,
         nextVote: parsed.myVote,
         serverScore: parsed.score,
+        likesList: parsed.list,
       };
     } catch (error) {
       return rejectWithValue(toApiError(error, 'actionFailedError'));
@@ -659,6 +719,36 @@ export const voteComment = createAsyncThunk(
         commentId,
         nextVote: parsed.myVote,
         serverScore: parsed.score,
+        likesList: parsed.list,
+      };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    }
+  }
+);
+
+export const adminRemoveUserLike = createAsyncThunk(
+  'posts/adminRemoveUserLike',
+  async ({ postId, commentId, targetUserId }, { getState, rejectWithValue }) => {
+    const { token, user } = getState().auth;
+    if (!token || user?.role !== 'admin') {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
+    }
+    const currentUserId = user.id;
+    const endpoint = postId
+      ? `/posts/${postId}/like`
+      : `/comments/${commentId}/like`;
+
+    try {
+      await api.delete(endpoint, { params: { user_id: targetUserId } });
+      const likesRes = await api.get(endpoint);
+      const parsed = parseLikesResponse(likesRes.data, currentUserId);
+      return {
+        postId: postId || null,
+        commentId: commentId || null,
+        nextVote: parsed.myVote,
+        serverScore: parsed.score,
+        likesList: parsed.list,
       };
     } catch (error) {
       return rejectWithValue(toApiError(error, 'actionFailedError'));
@@ -682,6 +772,8 @@ const postsSlice = createSlice({
     previewCategoriesByPost: {},
     postLikesMap: {},
     commentLikesMap: {},
+    postLikesListMap: {},
+    commentLikesListMap: {},
     status: 'idle',
     error: null,
     apiConnected: true,
@@ -974,6 +1066,27 @@ const postsSlice = createSlice({
         state.categories = action.payload;
         state.apiConnected = true;
       })
+      .addCase(fetchCategoryById.fulfilled, (state, action) => {
+        const cat = action.payload;
+        if (!cat?.id) return;
+        const exists = state.categories.some(
+          (c) => Number(c.id) === Number(cat.id)
+        );
+        if (exists) {
+          state.categories = state.categories.map((c) =>
+            Number(c.id) === Number(cat.id) ? { ...c, ...cat } : c
+          );
+        } else {
+          state.categories.push(cat);
+        }
+      })
+      .addCase(fetchCommentById.fulfilled, (state, action) => {
+        const c = action.payload;
+        if (!c?.id) return;
+        state.currentPostComments = state.currentPostComments.map((item) =>
+          Number(item.id) === Number(c.id) ? { ...item, ...c } : item
+        );
+      })
       .addCase(createCategory.fulfilled, (state, action) => {
         state.categories.push(action.payload);
         state.notification = makeToast('categoryCreatedToast', 'success');
@@ -1019,12 +1132,24 @@ const postsSlice = createSlice({
         );
       })
       .addCase(fetchPostPreviewComments.fulfilled, (state, action) => {
-        const { postId, comments, categories, likesScore, myVote } =
-          action.payload;
+        const {
+          postId,
+          comments,
+          categories,
+          likesScore,
+          myVote,
+          likesList,
+          commentLikesScores,
+          commentMyVotes,
+        } = action.payload;
         state.previewCommentsByPost[postId] = comments;
         state.previewCategoriesByPost[postId] = Array.isArray(categories)
           ? categories
           : [];
+
+        if (Array.isArray(likesList)) {
+          state.postLikesListMap[postId] = likesList;
+        }
 
         if (likesScore !== null && likesScore !== undefined) {
           state.postLikesMap[postId] = likesScore;
@@ -1033,6 +1158,22 @@ const postsSlice = createSlice({
           } else {
             delete state.userVotes[postId];
           }
+        }
+
+        if (commentLikesScores) {
+          state.commentLikesMap = {
+            ...state.commentLikesMap,
+            ...commentLikesScores,
+          };
+        }
+        if (commentMyVotes) {
+          Object.entries(commentMyVotes).forEach(([cid, v]) => {
+            if (v) {
+              state.commentVotes[cid] = v;
+            } else {
+              delete state.commentVotes[cid];
+            }
+          });
         }
       })
       .addCase(fetchPostDetails.pending, (state) => {
@@ -1049,6 +1190,9 @@ const postsSlice = createSlice({
         if (postId) {
           state.previewCommentsByPost[postId] = action.payload.comments;
           state.previewCategoriesByPost[postId] = action.payload.categories;
+          if (Array.isArray(action.payload.postLikesList)) {
+            state.postLikesListMap[postId] = action.payload.postLikesList;
+          }
         }
 
         if (
@@ -1068,6 +1212,12 @@ const postsSlice = createSlice({
           state.commentLikesMap = {
             ...state.commentLikesMap,
             ...action.payload.commentLikesScores,
+          };
+        }
+        if (action.payload.commentLikesLists) {
+          state.commentLikesListMap = {
+            ...state.commentLikesListMap,
+            ...action.payload.commentLikesLists,
           };
         }
         if (action.payload.commentMyVotes) {
@@ -1097,6 +1247,9 @@ const postsSlice = createSlice({
         state.currentPostComments = action.payload.comments;
         state.previewCommentsByPost[postId] = action.payload.comments;
 
+        if (Array.isArray(action.payload.postLikesList)) {
+          state.postLikesListMap[postId] = action.payload.postLikesList;
+        }
         if (
           action.payload.postLikesScore !== null &&
           action.payload.postLikesScore !== undefined
@@ -1107,6 +1260,12 @@ const postsSlice = createSlice({
           state.commentLikesMap = {
             ...state.commentLikesMap,
             ...action.payload.commentLikesScores,
+          };
+        }
+        if (action.payload.commentLikesLists) {
+          state.commentLikesListMap = {
+            ...state.commentLikesListMap,
+            ...action.payload.commentLikesLists,
           };
         }
       })
@@ -1277,7 +1436,7 @@ const postsSlice = createSlice({
         );
       })
       .addCase(votePost.fulfilled, (state, action) => {
-        const { postId, nextVote, serverScore } = action.payload;
+        const { postId, nextVote, serverScore, likesList } = action.payload;
         if (!nextVote) {
           delete state.userVotes[postId];
         } else {
@@ -1286,6 +1445,9 @@ const postsSlice = createSlice({
 
         if (serverScore !== null && serverScore !== undefined) {
           state.postLikesMap[postId] = serverScore;
+        }
+        if (Array.isArray(likesList)) {
+          state.postLikesListMap[postId] = likesList;
         }
         state.notification = makeToast(
           nextVote === 'like'
@@ -1304,7 +1466,7 @@ const postsSlice = createSlice({
         );
       })
       .addCase(voteComment.fulfilled, (state, action) => {
-        const { commentId, nextVote, serverScore } = action.payload;
+        const { commentId, nextVote, serverScore, likesList } = action.payload;
         if (!nextVote) {
           delete state.commentVotes[commentId];
         } else {
@@ -1313,6 +1475,9 @@ const postsSlice = createSlice({
 
         if (serverScore !== null && serverScore !== undefined) {
           state.commentLikesMap[commentId] = serverScore;
+        }
+        if (Array.isArray(likesList)) {
+          state.commentLikesListMap[commentId] = likesList;
         }
         state.notification = makeToast(
           nextVote === 'like'
@@ -1329,6 +1494,36 @@ const postsSlice = createSlice({
           'error',
           action.payload?.detail
         );
+      })
+      .addCase(adminRemoveUserLike.fulfilled, (state, action) => {
+        const { postId, commentId, nextVote, serverScore, likesList } =
+          action.payload;
+        if (postId) {
+          if (!nextVote) {
+            delete state.userVotes[postId];
+          } else {
+            state.userVotes[postId] = nextVote;
+          }
+          if (serverScore !== null && serverScore !== undefined) {
+            state.postLikesMap[postId] = serverScore;
+          }
+          if (Array.isArray(likesList)) {
+            state.postLikesListMap[postId] = likesList;
+          }
+        } else if (commentId) {
+          if (!nextVote) {
+            delete state.commentVotes[commentId];
+          } else {
+            state.commentVotes[commentId] = nextVote;
+          }
+          if (serverScore !== null && serverScore !== undefined) {
+            state.commentLikesMap[commentId] = serverScore;
+          }
+          if (Array.isArray(likesList)) {
+            state.commentLikesListMap[commentId] = likesList;
+          }
+        }
+        state.notification = makeToast('voteRemovedToast', 'success');
       })
       .addCase(loginUser.fulfilled, (state) => {
         state.userVotes = {};

@@ -2,10 +2,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   fetchPostDetails,
+  fetchCommentById,
   closePostPage,
   setCategoryId,
   votePost,
   voteComment,
+  adminRemoveUserLike,
   createComment,
   updateComment,
   deleteComment,
@@ -15,6 +17,7 @@ import {
   openAskModal,
   updateExistingPost,
   deleteExistingPost,
+  showNotification,
   REACTION_TYPES,
 } from '../../store/postsSlice';
 import {
@@ -37,6 +40,8 @@ const PostPage = () => {
     currentPostComments = [],
     postLikesMap = {},
     commentLikesMap = {},
+    postLikesListMap = {},
+    commentLikesListMap = {},
     postDetailsStatus,
     userVotes = {},
     commentVotes = {},
@@ -60,6 +65,8 @@ const PostPage = () => {
   const [editingCommentText, setEditingCommentText] = useState('');
   const [editCommentError, setEditCommentError] = useState('');
   const [commentError, setCommentError] = useState('');
+  const [openShareMenu, setOpenShareMenu] = useState(false);
+  const [openVotesKey, setOpenVotesKey] = useState(null);
 
   const bucketKey = String(user?.id || 'guest');
 
@@ -78,7 +85,13 @@ const PostPage = () => {
         dispatch(fetchUserById(c.author_id));
       }
     });
-  }, [currentPost, currentPostComments, dispatch]);
+    const postLikes = currentPost?.id
+      ? postLikesListMap[currentPost.id] || []
+      : [];
+    postLikes.forEach((l) => {
+      if (l?.author_id) dispatch(fetchUserById(l.author_id));
+    });
+  }, [currentPost, currentPostComments, postLikesListMap, dispatch]);
 
   const commentTree = useMemo(() => {
     const compare = (a, b) => {
@@ -250,6 +263,96 @@ const PostPage = () => {
     dispatch(closePostPage());
   };
 
+  const handleSharePost = (platform) => {
+    const url = `${window.location.origin}/?post=${currentPost.id}`;
+    if (platform === 'copy' || platform === 'instagram') {
+      navigator.clipboard?.writeText(url);
+      dispatch(
+        showNotification(
+          platform === 'instagram' ? 'instagramCopiedToast' : 'linkCopiedToast'
+        )
+      );
+    } else if (platform === 'telegram') {
+      window.open(
+        `https://t.me/share/url?url=${encodeURIComponent(
+          url
+        )}&text=${encodeURIComponent(currentPost.title)}`,
+        '_blank'
+      );
+    } else if (platform === 'facebook') {
+      window.open(
+        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          url
+        )}`,
+        '_blank'
+      );
+    }
+    setOpenShareMenu(false);
+  };
+
+  const renderVotesPopover = (likesList, targetPostId, targetCommentId) => {
+    if (!Array.isArray(likesList) || likesList.length === 0) return null;
+    const key = targetPostId ? `post_${targetPostId}` : `comment_${targetCommentId}`;
+    const isOpen = openVotesKey === key;
+
+    return (
+      <div className="votes-popover-wrap">
+        <button
+          type="button"
+          className="bookmark-btn"
+          title={t.votesListBtnTitle}
+          onClick={() => {
+            likesList.forEach((l) => {
+              if (l?.author_id) dispatch(fetchUserById(l.author_id));
+            });
+            setOpenVotesKey(isOpen ? null : key);
+          }}
+        >
+          👥 {likesList.length}
+        </button>
+        {isOpen && (
+          <div className="votes-popover">
+            {likesList.map((likeItem) => {
+              const voterId = likeItem.author_id || likeItem.user_id;
+              const voterObj = voterId ? usersMap[String(voterId)] : null;
+              const voterName =
+                (voterObj && !voterObj._notFound && voterObj.login) ||
+                `${t.userPrefix} #${voterId}`;
+              return (
+                <div
+                  key={likeItem.id || `${voterId}_${likeItem.type}`}
+                  className="votes-popover-row"
+                >
+                  <span>
+                    {likeItem.type === 'dislike' ? '👎' : '👍'} {voterName}
+                  </span>
+                  {isAdmin && voterId && (
+                    <button
+                      type="button"
+                      className="vote-remove-admin-btn"
+                      title={t.removeUserVoteBtn}
+                      onClick={() =>
+                        dispatch(
+                          adminRemoveUserLike({
+                            postId: targetPostId,
+                            commentId: targetCommentId,
+                            targetUserId: voterId,
+                          })
+                        )
+                      }
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderCommentNode = (node, depth = 0) => {
     const { comment, text: cleanText, children } = node;
     const cAuthorId = comment.author_id;
@@ -264,6 +367,7 @@ const PostPage = () => {
       commentLikesMap[comment.id] ?? comment.likes_count ?? 0
     );
     const cVote = commentVotes[comment.id] || null;
+    const cLikesList = commentLikesListMap[comment.id] || [];
     const cReactionData = commentReactions[comment.id] || {};
     const cReactionCounts = cReactionData.counts || {};
     const isHighlighted =
@@ -392,6 +496,8 @@ const PostPage = () => {
               </button>
             </div>
 
+            {renderVotesPopover(cLikesList, null, comment.id)}
+
             {!isPostInactive && (
               <button
                 type="button"
@@ -407,7 +513,7 @@ const PostPage = () => {
               </button>
             )}
 
-            {REACTION_TYPES.slice(0, 3).map((r) => {
+            {REACTION_TYPES.map((r) => {
               const count = Number(cReactionCounts?.[r.id] || 0);
               return (
                 <button
@@ -435,6 +541,7 @@ const PostPage = () => {
                 className="bookmark-btn"
                 onClick={() => {
                   setEditCommentError('');
+                  dispatch(fetchCommentById(comment.id));
                   setEditingCommentId(comment.id);
                   setEditingCommentText(cleanText);
                 }}
@@ -678,6 +785,12 @@ const PostPage = () => {
               </button>
             </div>
 
+            {renderVotesPopover(
+              postLikesListMap[currentPost.id] || [],
+              currentPost.id,
+              null
+            )}
+
             {REACTION_TYPES.map((r) => {
               const count = Number(postReactionCounts?.[r.id] || 0);
               return (
@@ -711,6 +824,41 @@ const PostPage = () => {
             >
               {isSaved ? `★ ${t.savedBtn}` : `☆ ${t.saveBtn}`}
             </button>
+
+            <div className="share-dropdown-wrap">
+              <button
+                type="button"
+                className="share-btn"
+                onClick={() => setOpenShareMenu((prev) => !prev)}
+              >
+                ↗ {t.shareBtn}
+              </button>
+              {openShareMenu && (
+                <div className="share-popover">
+                  <button type="button" onClick={() => handleSharePost('copy')}>
+                    🔗 {t.copyLinkBtn}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSharePost('telegram')}
+                  >
+                    ✈️ Telegram
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSharePost('facebook')}
+                  >
+                    📘 Facebook
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSharePost('instagram')}
+                  >
+                    📸 {t.instagramCopy}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </article>
