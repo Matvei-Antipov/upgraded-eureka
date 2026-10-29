@@ -287,7 +287,6 @@
   gap: 6px;
 }
 
-/* Панель быстрого поиска и фильтра пользователей по роли */
 .admin-users-filter-bar {
   display: flex;
   align-items: center;

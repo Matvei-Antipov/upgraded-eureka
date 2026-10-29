@@ -13,7 +13,6 @@ async function initDB() {
         await connection.query(`USE \`${process.env.DB_NAME}\`;`);
         console.log(`[Database] [INFO] Database '${process.env.DB_NAME}' is ready`);
 
-        //Table Users
         await connection.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -28,7 +27,6 @@ async function initDB() {
         `);
         console.log('[Database] [INFO] Table `users` is ready');
 
-        //Table Categories
         await connection.query(`
             CREATE TABLE IF NOT EXISTS categories (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -38,7 +36,6 @@ async function initDB() {
         `);
         console.log('[Database] [INFO] Table `categories` is ready');
 
-        //Table Posts
         await connection.query(`
             CREATE TABLE IF NOT EXISTS posts (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -52,7 +49,6 @@ async function initDB() {
         `);
         console.log('[Database] [INFO] Table `posts` is ready');
 
-        //Junction table for a many-to-many relationship (Posts <-> Categories)
         await connection.query(`
             CREATE TABLE IF NOT EXISTS post_categories (
                 post_id INT NOT NULL,
@@ -64,7 +60,6 @@ async function initDB() {
         `);
         console.log('[Database] [INFO] Table `post_categories` is ready');
 
-        //Table Comments
         await connection.query(`
             CREATE TABLE IF NOT EXISTS comments (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -79,7 +74,6 @@ async function initDB() {
         `);
         console.log('[Database] [INFO] Table `comments` is ready');
 
-        //Table Likes (polymorphic: for posts and comments)
         await connection.query(`
             CREATE TABLE IF NOT EXISTS likes (
                 id INT AUTO_INCREMENT PRIMARY KEY,

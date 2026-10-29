@@ -22,7 +22,6 @@
   min-width: 0;
 }
 
-/* Всплывающие нотификации (тосты) */
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -85,7 +84,6 @@
   color: #ffffff;
 }
 
-/* Всплывающее уведомление о новом комментарии */
 .comment-alert-container {
   position: fixed;
   bottom: 84px;

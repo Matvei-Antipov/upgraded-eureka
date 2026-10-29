@@ -2,10 +2,6 @@ import { PREVIEW_LENGTH } from '../config';
 
 export const DEFAULT_AVATAR = 'default-avatar.png';
 
-/**
- * The API stores only the uploaded file name (e.g. "1792571587852-me.png").
- * Files are served by the backend from /uploads (proxied by CRA in dev).
- */
 export const avatarUrl = (user) => {
   const raw = user?.profile_picture;
   if (!raw || raw === DEFAULT_AVATAR) return null;
@@ -50,10 +46,6 @@ export const formatDateTime = (value, language) => {
 
 export const byteLength = (str) => new TextEncoder().encode(String(str || '')).length;
 
-/**
- * Plain-text preview of a post body: code blocks and images are replaced with
- * short markers so the card height stays predictable.
- */
 export const toPreviewText = (content, codeLabel, imageLabel, maxLength = PREVIEW_LENGTH) => {
   const text = String(content || '')
     .replace(/```[\s\S]*?```/g, ` [${codeLabel}] `)
@@ -83,13 +75,6 @@ const sumReactionBonus = (reactionEntry) => {
   }, 0);
 };
 
-/**
- * Automatically computes a user's live rating from:
- * 1. Base database rating (`user.rating`)
- * 2. Net likes minus dislikes across all of the user's posts
- * 3. Net likes minus dislikes across all of the user's comments
- * 4. Weighted community reactions on the user's posts and comments
- */
 export const computeUserRating = (userId, postsState = {}, baseRating = 0) => {
   const targetId = Number(userId);
   if (!targetId) {

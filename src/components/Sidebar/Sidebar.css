@@ -83,7 +83,6 @@
   white-space: nowrap;
 }
 
-/* Статичный счетчик сохраненных постов без пульсации и без свечения */
 .saved-count-badge {
   display: inline-flex;
   align-items: center;
@@ -111,7 +110,6 @@
   transform: none !important;
 }
 
-/* Минималистичный список тем в стиле референса */
 .sidebar-cat-btn {
   width: 100%;
   display: flex;

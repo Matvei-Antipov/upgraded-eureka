@@ -1,20 +1,20 @@
-# Dependencies (root and backend)
-/node_modules
 node_modules/
+/node_modules
 api/node_modules/
 /.pnp
 .pnp.js
-api/uploads/
 
-# Production build
 /build
 build/
+dist/
 
-# Environment variables and secrets
 .env
+.env.*
 api/.env
+api/.env.*
 
-# OS metadata files (macOS, Windows, Linux)
+api/uploads/
+
 .DS_Store
 */.DS_Store
 ._*
@@ -22,20 +22,20 @@ api/.env
 __MACOSX/
 Thumbs.db
 
-# Logs and caches
+.idea/
+.vscode/
+.postman/
+api/.postman/
+api/postman/
+*.swp
+*.swo
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .npm
 .eslintcache
 
-# IDEs & editors
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Archives and task specs
 *.zip
 *.tar.gz
 *.pdf

@@ -39,9 +39,7 @@ const loadFromStorage = (key, fallback) => {
 const saveToStorage = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage quota errors
-  }
+  } catch {}
 };
 
 const pendingPreviewIds = new Set();
@@ -268,9 +266,7 @@ export const fetchPostPreviewComments = createAsyncThunk(
               commentLikesScores[c.id] = parsed.score;
             }
             commentMyVotes[c.id] = parsed.myVote || null;
-          } catch {
-            // ignore preview comment like fetch error
-          }
+          } catch {}
         })
       );
 
@@ -335,9 +331,7 @@ const loadFullPostBundle = async (postId, currentUserId) => {
         }
         commentMyVotes[c.id] = myVote || null;
         commentLikesLists[c.id] = list;
-      } catch {
-        // Ignore single comment like error
-      }
+      } catch {}
     })
   );
 
@@ -414,9 +408,7 @@ export const checkIncomingComments = createAsyncThunk(
       try {
         const res = await dispatch(fetchUserById(aid));
         if (res.payload?.login) return res.payload.login;
-      } catch {
-        // Ignore
-      }
+      } catch {}
       return `user_${aid}`;
     };
 
@@ -461,9 +453,7 @@ export const checkIncomingComments = createAsyncThunk(
               };
             }
           }
-        } catch {
-          // Ignore network errors during background poll
-        }
+        } catch {}
       })
     );
 
@@ -676,7 +666,6 @@ export const votePost = createAsyncThunk(
       if (currentVote === type) {
         await api.delete(`/posts/${postId}/like`);
       } else {
-        // Backend `Like.createOrUpdate` updates an existing vote in place
         await api.post(`/posts/${postId}/like`, { type });
       }
 
@@ -854,9 +843,7 @@ const postsSlice = createSlice({
         const url = new URL(window.location.href);
         url.searchParams.set('post', String(postId));
         window.history.replaceState({}, '', url.toString());
-      } catch {
-        // ignore history errors
-      }
+      } catch {}
     },
     closePostPage: (state) => {
       state.selectedPostId = null;
@@ -873,9 +860,7 @@ const postsSlice = createSlice({
           url.searchParams.delete('post');
           window.history.replaceState({}, '', url.toString());
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     },
     setViewMode: (state, action) => {
       const mode = action.payload;

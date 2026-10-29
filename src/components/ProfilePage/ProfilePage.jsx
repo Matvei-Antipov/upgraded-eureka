@@ -84,14 +84,12 @@ const ProfilePage = () => {
   const [profileFormError, setProfileFormError] = useState('');
   const [avatarFailed, setAvatarFailed] = useState(false);
 
-  // Admin panel: categories
   const [catTitle, setCatTitle] = useState('');
   const [catDesc, setCatDesc] = useState('');
   const [editingCatId, setEditingCatId] = useState(null);
   const [editCatTitle, setEditCatTitle] = useState('');
   const [editCatDesc, setEditCatDesc] = useState('');
 
-  // Admin panel: users
   const [newUserLogin, setNewUserLogin] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
@@ -101,7 +99,6 @@ const ProfilePage = () => {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
 
-  // Filtering, sorting and pagination of user's own posts
   const [profileCategoryFilter, setProfileCategoryFilter] = useState('all');
   const [profileSortBy, setProfileSortBy] = useState('date');
   const [profileSortOrder, setProfileSortOrder] = useState('desc');

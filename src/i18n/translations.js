@@ -129,7 +129,6 @@ export const translations = {
     answerEmptyError: 'Будь ласка, введіть текст відповіді перед відправкою.',
     answerShortError: 'Відповідь занадто коротка (мінімум 2 символи).',
 
-    /* AskQuestionModal */
     askModalTitle: 'Поставити нове питання',
     editModalTitle: 'Редагувати питання',
     questionTitleLabel: 'Заголовок питання',
@@ -193,7 +192,6 @@ export const translations = {
     noUserPosts: 'Публікацій за обраними параметрами ще немає.',
     showMoreUserPostsBtn: 'Показати ще публікації',
 
-    /* AuthModal */
     authLoginTab: 'Вхід',
     authRegisterTab: 'Реєстрація',
     authResetTab: 'Відновлення',
@@ -226,7 +224,6 @@ export const translations = {
     passwordsDoNotMatchError: 'Паролі не співпадають.',
     enterEmailError: 'Будь ласка, введіть ваш Email.',
 
-    /* Тости та серверні повідомлення */
     loginSuccessToast: 'Ви успішно увійшли в акаунт!',
     registerSuccessToast: 'Реєстрація успішна! Тепер ви можете увійти.',
     logoutSuccessToast: 'Ви вийшли з акаунту.',
@@ -422,7 +419,6 @@ export const translations = {
     answerEmptyError: 'Please enter an answer before submitting.',
     answerShortError: 'Answer is too short (at least 2 characters).',
 
-    /* AskQuestionModal */
     askModalTitle: 'Ask a New Question',
     editModalTitle: 'Edit Question',
     questionTitleLabel: 'Question Title',
@@ -486,7 +482,6 @@ export const translations = {
     noUserPosts: 'No publications found for the selected filter.',
     showMoreUserPostsBtn: 'Show more publications',
 
-    /* AuthModal */
     authLoginTab: 'Sign In',
     authRegisterTab: 'Sign Up',
     authResetTab: 'Reset Password',
@@ -519,7 +514,6 @@ export const translations = {
     passwordsDoNotMatchError: 'Passwords do not match.',
     enterEmailError: 'Please enter your email.',
 
-    /* Toasts & server messages */
     loginSuccessToast: 'Signed in successfully!',
     registerSuccessToast: 'Account created! You can now sign in.',
     logoutSuccessToast: 'You have logged out.',

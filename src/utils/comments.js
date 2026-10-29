@@ -1,15 +1,3 @@
-/**
- * Nested comments ("comment comments").
- *
- * The API has no parent_id column for comments, so the relation is encoded
- * in the comment content itself with a technical prefix:
- *
- *   [reply:42]
- *   actual text of the answer
- *
- * The prefix is stored in the database, therefore every user and every
- * browser sees the same tree. It is never shown in the UI.
- */
 const REPLY_RE = /^\[reply:(\d+)\][ \t]*\r?\n?/;
 
 export const parseCommentContent = (content) => {
@@ -24,11 +12,6 @@ export const buildCommentContent = (text, parentId) => {
   return parentId ? `[reply:${parentId}]\n${clean}` : clean;
 };
 
-/**
- * Builds a tree from the flat API list. Comments whose parent is missing
- * (deleted or hidden) become root comments. Every level is sorted with
- * `compare`.
- */
 export const buildCommentTree = (comments, compare) => {
   const nodes = new Map();
   comments.forEach((comment) => {

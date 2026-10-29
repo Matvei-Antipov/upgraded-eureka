@@ -2,11 +2,6 @@ import axios from 'axios';
 
 export const TOKEN_KEY = 'usof_token';
 
-/**
- * Single axios instance for the whole app.
- * - adds the JWT from localStorage to every request;
- * - reports expired / invalid tokens (HTTP 401) to the store.
- */
 const api = axios.create({ baseURL: '/api' });
 
 let unauthorizedHandler = null;
@@ -66,10 +61,6 @@ export const isTokenExpired = (token) => {
   return payload.exp * 1000 <= Date.now();
 };
 
-/**
- * Normalised, serialisable error object used as `rejectWithValue` payload.
- * `key` is a translation key, `detail` is the raw message from the API.
- */
 export const toApiError = (error, key) => ({
   key,
   detail: error?.response?.data?.error || error?.response?.data?.message || null,

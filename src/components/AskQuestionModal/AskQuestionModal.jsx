@@ -109,9 +109,7 @@ const AskQuestionModal = () => {
           setDraftSavedAt(Boolean(parsed.title || parsed.content));
           return;
         }
-      } catch {
-        // ignore draft parse errors
-      }
+      } catch {}
       setTitle('');
       setContent('');
       setSelectedCategoryIds(
@@ -144,9 +142,7 @@ const AskQuestionModal = () => {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
         setDraftSavedAt(false);
       }
-    } catch {
-      // ignore quota error
-    }
+    } catch {}
   }, [title, content, selectedCategoryIds, isAskModalOpen, editingPost]);
 
   if (!isAskModalOpen) return null;

@@ -18,14 +18,14 @@ The following components must be installed on your machine to build and run the 
 * A Mailtrap account for testing the password reset functionality
 
 **NPM Dependencies:**
-* `express` — Web framework for routing.
-* `mysql2` — MySQL driver for executing database queries.
-* `bcrypt` — Utility for secure password hashing.
-* `jsonwebtoken` — Generates and verifies JWT tokens for authorization.
-* `multer` — Middleware for handling image uploads.
-* `nodemailer` — Module for sending emails.
-* `dotenv` — Manages environment variables.
-* `nodemon` (dev) — Automatically restarts the server during development.
+* `express` - Web framework for routing.
+* `mysql2` - MySQL driver for executing database queries.
+* `bcrypt` - Utility for secure password hashing.
+* `jsonwebtoken` - Generates and verifies JWT tokens for authorization.
+* `multer` - Middleware for handling image uploads.
+* `nodemailer` - Module for sending emails.
+* `dotenv` - Manages environment variables.
+* `nodemon` (dev) - Automatically restarts the server during development.
 
 ## How to run the solution
 Follow these steps from cloning the repository to the first launch of the program:

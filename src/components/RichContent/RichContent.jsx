@@ -2,12 +2,6 @@ import React, { useState } from 'react';
 import { translations } from '../../i18n/translations';
 import { PREVIEW_LENGTH } from '../../config';
 
-/**
- * Shared renderer for post and comment bodies:
- * - fenced code blocks ```lang ... ``` with a copy button;
- * - inline code `...`;
- * - markdown images ![alt](url).
- */
 const RichContent = ({ text, compact = false, language = 'uk' }) => {
   const [copiedIndex, setCopiedIndex] = useState(null);
   if (!text) return null;

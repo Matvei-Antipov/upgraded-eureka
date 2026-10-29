@@ -1,12 +1,3 @@
-/**
- * localStorage helpers for the creative, browser-side features
- * (bookmarks, personal reactions, visit statistics, seen comments).
- *
- * Nothing here replaces API data: all posts, comments, likes and profiles are
- * always loaded from the server. Personal data is stored per user id so that
- * several accounts in one browser do not see each other's bookmarks.
- */
-
 const read = (key, fallback) => {
   try {
     const raw = localStorage.getItem(key);
@@ -19,9 +10,7 @@ const read = (key, fallback) => {
 const write = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Quota exceeded or storage disabled: the feature simply is not persisted.
-  }
+  } catch {}
 };
 
 const userKey = (base, userId) => `${base}_u${userId}`;
@@ -53,7 +42,6 @@ export const loadSiteStats = () =>
 
 export const storeSiteStats = (stats) => write(STATS_KEY, stats);
 
-/** Counts one visit per browser session. */
 export const registerVisit = () => {
   const stats = loadSiteStats();
   try {
@@ -63,17 +51,10 @@ export const registerVisit = () => {
       storeSiteStats(stats);
       sessionStorage.setItem('usof_visit_counted', '1');
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
   return stats;
 };
 
-/**
- * Previous versions of the app kept fake copies of server data in
- * localStorage (local posts, overrides, deleted ids...). They are removed so
- * that the UI shows only real API data.
- */
 const LEGACY_KEYS = [
   'usof_post_overrides',
   'usof_local_posts',
@@ -100,7 +81,5 @@ export const cleanupLegacyStorage = () => {
     Object.keys(localStorage)
       .filter((key) => key.startsWith('usof_seen_comments_u_'))
       .forEach((key) => localStorage.removeItem(key));
-  } catch {
-    // ignore
-  }
+  } catch {}
 };

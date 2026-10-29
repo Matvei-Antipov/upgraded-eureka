@@ -32,9 +32,7 @@ const saveProfileOverride = (userId, overrideData) => {
       ...overrideData,
     };
     localStorage.setItem(PROFILE_OVERRIDES_KEY, JSON.stringify(overrides));
-  } catch {
-    // ignore storage errors
-  }
+  } catch {}
 };
 
 const removeProfileOverride = (userId) => {
@@ -45,9 +43,7 @@ const removeProfileOverride = (userId) => {
       delete overrides[String(userId)];
       localStorage.setItem(PROFILE_OVERRIDES_KEY, JSON.stringify(overrides));
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 };
 
 const applyUserOverride = (userObj) => {
@@ -118,9 +114,7 @@ const saveCachedUser = (user) => {
     } else {
       localStorage.removeItem(USER_CACHE_KEY);
     }
-  } catch {
-    // ignore storage errors
-  }
+  } catch {}
 };
 
 export const verifySession = createAsyncThunk(
@@ -259,9 +253,7 @@ export const loginUser = createAsyncThunk(
           if (pendingFullName) {
             sessionStorage.removeItem(pendingKey);
           }
-        } catch {
-          // ignore optional full_name sync error
-        }
+        } catch {}
       }
 
       saveCachedUser(userObj);
@@ -287,17 +279,13 @@ export const registerUser = createAsyncThunk(
         password_confirmation: passwordConfirmation,
       });
 
-      // Remember desired full name until the user signs in so we can sync it
-      // via PATCH /api/users/:id if needed.
       if (cleanFullName && cleanFullName !== cleanLogin) {
         try {
           sessionStorage.setItem(
             `usof_pending_fullname_${cleanLogin.toLowerCase()}`,
             cleanFullName
           );
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
 
       return response.data;
@@ -310,9 +298,7 @@ export const registerUser = createAsyncThunk(
 export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   try {
     await api.post('/auth/logout', {});
-  } catch {
-    // Even if server token is already expired, clear client session.
-  } finally {
+  } catch {} finally {
     localStorage.removeItem(TOKEN_KEY);
     saveCachedUser(null);
   }
@@ -406,7 +392,6 @@ export const updateUserProfile = createAsyncThunk(
       const refreshed = await api.get(`/users/${targetId}`);
       return finalizeUpdatedUser(refreshed.data);
     } catch (error) {
-      // Backend returns 404 when values are identical to current DB row
       if (
         error.response?.status === 404 &&
         String(error.response?.data?.error || '').includes('no changes')
@@ -535,9 +520,7 @@ const authSlice = createSlice({
       state.language = action.payload;
       try {
         localStorage.setItem('usof_lang', action.payload);
-      } catch {
-        // ignore
-      }
+      } catch {}
     },
     setResetTokenFromUrl: (state, action) => {
       state.resetTokenFromUrl = action.payload || '';
