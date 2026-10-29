@@ -1,7 +1,7 @@
-# USOF (Ucode Stack Overflow)
+# USOF (rozbir)
 
 ## Short description
-**USOF** is a full-stack Q&A web application for developers similar to Stack Overflow. The project combines a single-page React frontend with a Node.js and Express REST API. Users can register, log in with JWT, recover passwords via email, ask questions, select categories, write comments and replies, vote with likes and dislikes, bookmark posts, and manage their profile. The backend uses MySQL with raw SQL queries without any ORM.
+**USOF (rozbir)** is a full-stack Q&A web application for developers similar to Stack Overflow. The project combines a single-page React frontend with a Node.js and Express REST API. Users can register, log in with JWT, recover passwords via email, ask questions, select categories, write comments and replies, vote with likes and dislikes, bookmark posts, and manage their profile. The backend uses MySQL with raw SQL queries without any ORM.
 
 ![API Routes in Postman](./api/assets/screenshot-postman.png)
 *Postman request example.*
@@ -74,56 +74,56 @@ To run the project locally you need:
    ```
    Open `http://localhost:3001` in the browser. Requests to `/api` and `/uploads` are proxied to `http://localhost:3000`.
 
-## Non-functional requirements (Нефункціональні вимоги)
+## Non-functional requirements
 
-1. **Продуктивність**
-   * Час відповіді сервера на типові запити API (`GET /api/posts`, `POST /api/posts`, `POST /api/posts/:id/like`) не перевищує 200 мс у звичайному режимі та 1.5 с при навантаженні до 500 одночасних користувачів.
-   * Початкове завантаження сторінки застосунку займає до 2.5 с при швидкості інтернету 10 Мбіт/с.
-   * Розмір файлу аватара обмежено до 5 МБ, а вбудовані зображення у питаннях стискаються на клієнті до ширини 480 px.
-   * *Перевірка:* вкладка Network і Lighthouse у Chrome DevTools, заміри часу у Postman.
+1. **Performance**
+   * API response time for standard requests (`GET /api/posts`, `POST /api/posts`, `POST /api/posts/:id/like`) stays under 200 ms under normal load and under 1.5 s with up to 500 concurrent users.
+   * Initial page load takes less than 2.5 s on a 10 Mbps connection.
+   * Avatar uploads are limited to 5 MB, and inline question images are compressed on the client to 480 px width.
+   * *Verification:* Chrome DevTools (Network and Lighthouse tabs) and Postman response timings.
 
-2. **Безпека**
-   * Паролі зберігаються у БД у вигляді хешів `bcrypt` (10 раундів солі).
-   * Доступ до захищених ендпоінтів здійснюється за допомогою JWT-токенів (термін дії 24 години) через заголовок `Authorization: Bearer <token>`.
-   * Перевірка ролей (`user`, `admin`) та автора запису виконується на бекенді в `authMiddleware` та контролерах.
-   * Усі SQL-запити виконуються через параметризовані вирази (`?`), що захищає від SQL-ін'єкцій.
-   * *Перевірка:* тестування захищених маршрутів без токена (401) і без прав адміністратора (403) через Postman.
+2. **Security**
+   * User passwords are stored as `bcrypt` hashes (10 salt rounds).
+   * Protected endpoints require a valid JWT token (24-hour expiration) passed in the `Authorization: Bearer <token>` header.
+   * Role checks (`user`, `admin`) and resource ownership checks are enforced on the server in `authMiddleware` and controllers.
+   * All SQL queries use parameterized statements (`?`) to prevent SQL injection.
+   * *Verification:* testing protected routes without a token (401) and without admin permissions (403) in Postman.
 
-3. **Надійність**
-   * Зовнішні ключі у таблицях БД мають правило `ON DELETE CASCADE`, а таблиця `likes` має перевірку `CHECK`, щоб уникнути некоректних записів.
-   * При запуску сервера функція `initDB()` автоматично створює базу даних і всі таблиці, якщо їх ще немає.
-   * Чернетка нового питання зберігається у `localStorage`, тому текст не втрачається при випадковому оновленні вкладки.
-   * *Перевірка:* перезапуск сервера і перевірка збереження даних у MySQL та чернетки у браузері.
+3. **Reliability**
+   * Foreign keys in MySQL tables use `ON DELETE CASCADE`, and the `likes` table includes a `CHECK` constraint to keep data consistent.
+   * On server startup, `initDB()` automatically creates the database and all 6 tables if they do not exist.
+   * Question drafts are saved in `localStorage` so unsent text is not lost on page reload.
+   * *Verification:* restarting the server and checking data persistence in MySQL and draft recovery in the browser.
 
-4. **Масштабованість**
-   * Сервер не зберігає сесії в оперативній пам'яті (використовується JWT), тому можна запускати кілька екземплярів Node.js-сервера.
-   * Стрічка питань підтримує пагінацію з вибором кількості елементів на сторінці (5, 10, 20, 50) або режим підвантаження кнопкою.
-   * *Перевірка:* робота стрічки питань при різних значеннях `page` та `limit`.
+4. **Scalability**
+   * The API does not store sessions in memory (JWT is used), allowing multiple Node.js instances to run behind a load balancer.
+   * The question feed supports pagination with selectable page sizes (5, 10, 20, 50) as well as a load-more mode.
+   * *Verification:* testing the feed with different `page` and `limit` values.
 
-5. **Зручність використання**
-   * Адаптивна верстка для десктопів, планшетів (до 900 px) і смартфонів (до 520 px).
-   * Підтримка двох мов інтерфейсу (українська та англійська) з перемиканням у шапці сайту.
-   * Валідація всіх полів форм із підказками про помилки та спливаючими тост-повідомленнями. Оцінка зручності за шкалою SUS становить понад 75 балів зі 100, базові елементи відповідають рівню A стандарту WCAG 2.1.
-   * *Перевірка:* режим мобільних пристроїв у Chrome DevTools та перевірка форм з порожніми/некоректними полями.
+5. **Usability**
+   * Responsive layout for desktop screens, tablets (up to 900 px), and mobile phones (up to 520 px).
+   * Two interface languages (Ukrainian and English) with instant switching in the header.
+   * Form validation with clear error messages and toast notifications. The target System Usability Scale (SUS) score is above 75/100, and core elements follow WCAG 2.1 Level A.
+   * *Verification:* Chrome DevTools device toolbar (`375px`, `768px`, `1440px`) and form validation checks.
 
 ## UML diagrams and database schema
 
-### 1. Use-Case Diagram (Діаграма варіантів використання)
+### 1. Use-Case Diagram
 ![Use-Case Diagram](./docs/diagrams/01-use-case-diagram.svg)
 
-### 2. Component Diagram (Діаграма компонентів)
+### 2. Component Diagram
 ![Component Diagram](./docs/diagrams/02-component-diagram.svg)
 
-### 3. Deployment Diagram (Діаграма розгортання)
+### 3. Deployment Diagram
 ![Deployment Diagram](./docs/diagrams/03-deployment-diagram.svg)
 
-### 4. Activity Diagram (Діаграма діяльності)
+### 4. Activity Diagram
 ![Activity Diagram](./docs/diagrams/04-activity-diagram.svg)
 
-### 5. Sequence Diagram (Діаграма послідовності дій)
+### 5. Sequence Diagram
 ![Sequence Diagram](./docs/diagrams/05-sequence-diagram.svg)
 
-### 6. Database Schema (Схема бази даних)
+### 6. Database Schema
 ![Database ER Schema](./docs/diagrams/06-database-schema.svg)
 
 ## Full-fledged documentation

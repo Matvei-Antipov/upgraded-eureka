@@ -41,6 +41,10 @@ const MainPage = () => {
   const t = translations[language] || translations.uk;
 
   useEffect(() => {
+    document.title = language === 'en' ? 'rozbir' : 'розбір';
+  }, [language]);
+
+  useEffect(() => {
     dispatch(verifySession());
     dispatch(checkApiHealth());
 
