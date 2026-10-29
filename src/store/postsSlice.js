@@ -1,11 +1,24 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import api, { toApiError } from '../api/client';
 import {
   fetchUserById,
+  loginUser,
   logoutUser,
   updateUserProfile,
   uploadUserAvatar,
+  adminCreateUser,
+  adminDeleteUser,
+  handleSessionExpired,
 } from './authSlice';
+import {
+  DEFAULT_PAGE_SIZE,
+  FETCH_ALL_LIMIT,
+} from '../config';
+import { buildCommentContent, parseCommentContent } from '../utils/comments';
+import {
+  registerVisit,
+  storeSiteStats,
+} from '../utils/storage';
 
 export const REACTION_TYPES = [
   { id: 'fire', emoji: '🔥', label: 'Гаряче', labelEn: 'Hot', weight: 2 },
@@ -31,50 +44,7 @@ const saveToStorage = (key, value) => {
   }
 };
 
-const applyPostState = (rawPost, categoryOverrides = {}) => {
-  if (!rawPost) return null;
-  const postOverrides = loadFromStorage('usof_post_overrides', {});
-  const ov = postOverrides[String(rawPost.id)];
-  const catOv = categoryOverrides[rawPost.id] || ov?.categories;
-
-  return {
-    ...rawPost,
-    title: ov?.title !== undefined ? ov.title : rawPost.title,
-    content: ov?.content !== undefined ? ov.content : rawPost.content,
-    status: ov?.status !== undefined ? ov.status : rawPost.status,
-    categories: catOv !== undefined ? catOv : rawPost.categories,
-  };
-};
-
-const applyCommentsState = (rawComments, postId = null) => {
-  const baseList = Array.isArray(rawComments) ? [...rawComments] : [];
-  if (postId !== null && postId !== undefined) {
-    const localCommentsMap = loadFromStorage('usof_local_comments', {});
-    const localForPost = Array.isArray(localCommentsMap[String(postId)])
-      ? localCommentsMap[String(postId)]
-      : [];
-    const existingIds = new Set(baseList.map((c) => String(c.id)));
-    localForPost.forEach((lc) => {
-      if (lc && !existingIds.has(String(lc.id))) {
-        baseList.push(lc);
-      }
-    });
-  }
-
-  const deletedIds = loadFromStorage('usof_deleted_comments', []);
-  const overrides = loadFromStorage('usof_comment_overrides', {});
-  return baseList
-    .filter((c) => c && !deletedIds.includes(String(c.id)))
-    .map((c) => {
-      const ov = overrides[String(c.id)];
-      if (!ov) return c;
-      return {
-        ...c,
-        content: ov.content !== undefined ? ov.content : c.content,
-        status: ov.status !== undefined ? ov.status : c.status,
-      };
-    });
-};
+const pendingPreviewIds = new Set();
 
 const parseLikesResponse = (likesData, currentUserId) => {
   if (typeof likesData === 'number') {
@@ -98,59 +68,68 @@ const parseLikesResponse = (likesData, currentUserId) => {
   return { score, myVote };
 };
 
-const initSiteStats = () => {
-  const stats = loadFromStorage('usof_site_stats', {
-    totalVisits: 1,
-    totalPostViews: 0,
-    postViewsById: {},
-    lastVisit: new Date().toISOString(),
-  });
-  if (!sessionStorage.getItem('usof_visit_counted')) {
-    stats.totalVisits = (stats.totalVisits || 0) + 1;
-    stats.lastVisit = new Date().toISOString();
-    saveToStorage('usof_site_stats', stats);
-    sessionStorage.setItem('usof_visit_counted', '1');
+export const checkApiHealth = createAsyncThunk('posts/checkApiHealth', async () => {
+  try {
+    await api.get('');
+    return true;
+  } catch {
+    return false;
   }
-  return stats;
-};
+});
 
 export const fetchPosts = createAsyncThunk(
   'posts/fetchPosts',
   async (append = false, { getState, rejectWithValue }) => {
-    const { sortBy, order, statusFilter } = getState().posts;
-    const { user, token } = getState().auth;
-
-    const params = {
-      page: 1,
-      limit: 100,
+    const {
       sortBy,
       order,
+      categoryId,
+      statusFilter,
+      startDate,
+      endDate,
+    } = getState().posts;
+    const { user } = getState().auth;
+    const isAdmin = user?.role === 'admin';
+
+    const baseParams = {
+      page: 1,
+      limit: FETCH_ALL_LIMIT,
+      sortBy,
+      order: String(order || 'DESC').toUpperCase(),
     };
 
-    if (user?.role === 'admin' && statusFilter && statusFilter !== 'active') {
-      params.status = statusFilter;
-    }
+    if (categoryId) baseParams.category = categoryId;
+    if (startDate) baseParams.startDate = `${startDate} 00:00:00`;
+    if (endDate) baseParams.endDate = `${endDate} 23:59:59`;
 
     try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get('/api/posts', { params, headers });
+      if (isAdmin && statusFilter === 'all') {
+        const [activeRes, inactiveRes] = await Promise.all([
+          api.get('/posts', { params: { ...baseParams, status: 'active' } }),
+          api
+            .get('/posts', { params: { ...baseParams, status: 'inactive' } })
+            .catch(() => ({ data: [] })),
+        ]);
+        const activeList = Array.isArray(activeRes.data) ? activeRes.data : [];
+        const inactiveList = Array.isArray(inactiveRes.data) ? inactiveRes.data : [];
+        const byId = new Map();
+        [...activeList, ...inactiveList].forEach((p) => {
+          if (p?.id) byId.set(Number(p.id), p);
+        });
+        return { data: Array.from(byId.values()), append };
+      }
+
+      const params = { ...baseParams };
+      if (isAdmin && statusFilter === 'inactive') {
+        params.status = 'inactive';
+      } else {
+        params.status = 'active';
+      }
+
+      const response = await api.get('/posts', { params });
       return { data: response.data, append };
     } catch (error) {
-      try {
-        const retryResponse = await axios.get('/api/posts');
-        return { data: retryResponse.data, append };
-      } catch (retryError) {
-        const localPosts = loadFromStorage('usof_local_posts', []);
-        if (localPosts.length > 0) {
-          return { data: localPosts, append: false };
-        }
-        return rejectWithValue(
-          retryError.response?.data?.error ||
-            error.response?.data?.error ||
-            error.message ||
-            'Помилка завантаження постів з БД'
-        );
-      }
+      return rejectWithValue(toApiError(error, 'errorLoadingPosts'));
     }
   }
 );
@@ -159,12 +138,10 @@ export const fetchCategories = createAsyncThunk(
   'posts/fetchCategories',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('/api/categories');
-      return response.data;
+      const response = await api.get('/categories');
+      return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.error || 'Помилка завантаження категорій'
-      );
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
@@ -174,30 +151,23 @@ export const createCategory = createAsyncThunk(
   async ({ title, description }, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
     if (!token || user?.role !== 'admin') {
-      return rejectWithValue('Тільки адміністратор може створювати категорії');
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
     const cleanTitle = title.trim();
-    const cleanDesc = description?.trim() || `Питання за темою ${cleanTitle}`;
+    const cleanDesc = description?.trim() || '';
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const response = await axios.post(
-        '/api/categories',
-        { title: cleanTitle, description: cleanDesc },
-        { headers }
-      );
-      const createdId =
-        response.data?.categoryId || response.data?.id || Date.now();
+      const response = await api.post('/categories', {
+        title: cleanTitle,
+        description: cleanDesc,
+      });
+      const createdId = response.data?.categoryId || response.data?.id;
       return {
         id: Number(createdId),
         title: cleanTitle,
         description: cleanDesc,
       };
-    } catch {
-      return {
-        id: Date.now(),
-        title: cleanTitle,
-        description: cleanDesc,
-      };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
@@ -207,18 +177,20 @@ export const updateCategory = createAsyncThunk(
   async ({ categoryId, title, description }, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
     if (!token || user?.role !== 'admin') {
-      return rejectWithValue('Тільки адміністратор може редагувати категорії');
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
     try {
-      await axios.patch(
-        `/api/categories/${categoryId}`,
-        { title, description },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-    } catch {
-      // Fallback
+      await api.patch(`/categories/${categoryId}`, { title, description });
+      return { categoryId, title, description };
+    } catch (error) {
+      if (
+        error.response?.status === 404 &&
+        String(error.response?.data?.error || '').includes('no changes')
+      ) {
+        return { categoryId, title, description };
+      }
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-    return { categoryId, title, description };
   }
 );
 
@@ -227,149 +199,110 @@ export const deleteCategory = createAsyncThunk(
   async (categoryId, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
     if (!token || user?.role !== 'admin') {
-      return rejectWithValue('Тільки адміністратор може видаляти категорії');
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
     try {
-      await axios.delete(`/api/categories/${categoryId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {
-      // Fallback
+      await api.delete(`/categories/${categoryId}`);
+      return categoryId;
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-    return categoryId;
   }
 );
 
 export const fetchPostPreviewComments = createAsyncThunk(
   'posts/fetchPostPreviewComments',
   async (postId, { getState }) => {
-    const { user, token } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const { user } = getState().auth;
+    const currentUserId = user?.id;
     try {
       const [commentsRes, categoriesRes, likesRes] = await Promise.all([
-        axios
-          .get(`/api/posts/${postId}/comments`, { headers })
-          .catch(() => ({ data: [] })),
-        axios
-          .get(`/api/posts/${postId}/categories`, { headers })
-          .catch(() => ({ data: [] })),
-        axios
-          .get(`/api/posts/${postId}/like`, { headers })
-          .catch(() => ({ data: null })),
+        api.get(`/posts/${postId}/comments`).catch(() => ({ data: [] })),
+        api.get(`/posts/${postId}/categories`).catch(() => ({ data: [] })),
+        api.get(`/posts/${postId}/like`).catch(() => ({ data: null })),
       ]);
 
-      const comments = applyCommentsState(
-        Array.isArray(commentsRes.data) ? commentsRes.data : [],
-        postId
-      );
-      const categories = Array.isArray(categoriesRes.data)
-        ? categoriesRes.data
-        : [];
+      const comments = Array.isArray(commentsRes.data) ? commentsRes.data : [];
+      const categories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
       const { score: likesScore, myVote } = parseLikesResponse(
         likesRes.data,
         currentUserId
       );
 
       return { postId, comments, categories, likesScore, myVote };
-    } catch {
-      return {
-        postId,
-        comments: applyCommentsState([], postId),
-        categories: [],
-        likesScore: null,
-        myVote: null,
-      };
+    } finally {
+      pendingPreviewIds.delete(String(postId));
     }
+  },
+  {
+    condition: (postId, { getState }) => {
+      if (!postId) return false;
+      const key = String(postId);
+      const { previewCommentsByPost } = getState().posts;
+      if (previewCommentsByPost[key] !== undefined || pendingPreviewIds.has(key)) {
+        return false;
+      }
+      pendingPreviewIds.add(key);
+      return true;
+    },
   }
 );
+
+const loadFullPostBundle = async (postId, currentUserId) => {
+  const [postRes, categoriesRes, commentsRes, postLikesRes] = await Promise.all([
+    api.get(`/posts/${postId}`),
+    api.get(`/posts/${postId}/categories`).catch(() => ({ data: [] })),
+    api.get(`/posts/${postId}/comments`).catch(() => ({ data: [] })),
+    api.get(`/posts/${postId}/like`).catch(() => ({ data: null })),
+  ]);
+
+  const comments = Array.isArray(commentsRes.data) ? commentsRes.data : [];
+  const { score: postLikesScore, myVote: myPostVote } = parseLikesResponse(
+    postLikesRes.data,
+    currentUserId
+  );
+
+  const commentLikesScores = {};
+  const commentMyVotes = {};
+
+  await Promise.all(
+    comments.map(async (c) => {
+      if (!c.id) return;
+      try {
+        const cLikeRes = await api.get(`/comments/${c.id}/like`);
+        const { score, myVote } = parseLikesResponse(
+          cLikeRes.data,
+          currentUserId
+        );
+        if (score !== null) {
+          commentLikesScores[c.id] = score;
+        }
+        commentMyVotes[c.id] = myVote || null;
+      } catch {
+        // Ignore single comment like error
+      }
+    })
+  );
+
+  return {
+    post: postRes.data,
+    categories: Array.isArray(categoriesRes.data) ? categoriesRes.data : [],
+    comments,
+    postLikesScore,
+    myPostVote,
+    commentLikesScores,
+    commentMyVotes,
+  };
+};
 
 export const fetchPostDetails = createAsyncThunk(
   'posts/fetchPostDetails',
   async (postId, { getState, rejectWithValue }) => {
-    const { user, token } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-    const localPosts = loadFromStorage('usof_local_posts', []);
-    const localFound =
-      localPosts.find((p) => String(p.id) === String(postId)) ||
-      getState().posts.items.find((p) => String(p.id) === String(postId));
-
+    const currentUserId = getState().auth.user?.id;
     try {
-      const [postRes, categoriesRes, commentsRes, postLikesRes] =
-        await Promise.all([
-          axios.get(`/api/posts/${postId}`, { headers }),
-          axios
-            .get(`/api/posts/${postId}/categories`, { headers })
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`/api/posts/${postId}/comments`, { headers })
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`/api/posts/${postId}/like`, { headers })
-            .catch(() => ({ data: null })),
-        ]);
-
-      const comments = applyCommentsState(
-        Array.isArray(commentsRes.data) ? commentsRes.data : [],
-        postId
-      );
-      const { score: postLikesScore, myVote: myPostVote } = parseLikesResponse(
-        postLikesRes.data,
-        currentUserId
-      );
-
-      const commentLikesScores = {};
-      const commentMyVotes = {};
-
-      await Promise.all(
-        comments.map(async (c) => {
-          if (!c.id) return;
-          try {
-            const cLikeRes = await axios.get(`/api/comments/${c.id}/like`, {
-              headers,
-            });
-            const { score, myVote } = parseLikesResponse(
-              cLikeRes.data,
-              currentUserId
-            );
-            if (score !== null) {
-              commentLikesScores[c.id] = score;
-            }
-            if (myVote) {
-              commentMyVotes[c.id] = myVote;
-            }
-          } catch {
-            // Ignore
-          }
-        })
-      );
-
-      return {
-        post: postRes.data,
-        categories: Array.isArray(categoriesRes.data) ? categoriesRes.data : [],
-        comments,
-        postLikesScore,
-        myPostVote,
-        commentLikesScores,
-        commentMyVotes,
-      };
+      return await loadFullPostBundle(postId, currentUserId);
     } catch (error) {
-      if (localFound) {
-        return {
-          post: localFound,
-          categories: localFound.categories || [],
-          comments: applyCommentsState([], postId),
-          postLikesScore: localFound.likes_count || 0,
-          myPostVote: null,
-          commentLikesScores: {},
-          commentMyVotes: {},
-        };
-      }
-      return rejectWithValue(
-        error.response?.data?.error || 'Питання не знайдено в базі даних'
-      );
+      return rejectWithValue(toApiError(error, 'notFoundTitle'));
     }
   }
 );
@@ -377,64 +310,9 @@ export const fetchPostDetails = createAsyncThunk(
 export const silentFetchPostDetails = createAsyncThunk(
   'posts/silentFetchPostDetails',
   async (postId, { getState }) => {
-    const { user, token } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const currentUserId = getState().auth.user?.id;
     try {
-      const [postRes, categoriesRes, commentsRes, postLikesRes] =
-        await Promise.all([
-          axios.get(`/api/posts/${postId}`, { headers }),
-          axios
-            .get(`/api/posts/${postId}/categories`, { headers })
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`/api/posts/${postId}/comments`, { headers })
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`/api/posts/${postId}/like`, { headers })
-            .catch(() => ({ data: null })),
-        ]);
-
-      const comments = applyCommentsState(
-        Array.isArray(commentsRes.data) ? commentsRes.data : [],
-        postId
-      );
-      const { score: postLikesScore, myVote: myPostVote } = parseLikesResponse(
-        postLikesRes.data,
-        currentUserId
-      );
-
-      const commentLikesScores = {};
-      const commentMyVotes = {};
-
-      await Promise.all(
-        comments.map(async (c) => {
-          if (!c.id) return;
-          try {
-            const cLikeRes = await axios.get(`/api/comments/${c.id}/like`, {
-              headers,
-            });
-            const { score, myVote } = parseLikesResponse(
-              cLikeRes.data,
-              currentUserId
-            );
-            if (score !== null) commentLikesScores[c.id] = score;
-            if (myVote) commentMyVotes[c.id] = myVote;
-          } catch {
-            // Ignore
-          }
-        })
-      );
-
-      return {
-        post: postRes.data,
-        categories: Array.isArray(categoriesRes.data) ? categoriesRes.data : [],
-        comments,
-        postLikesScore,
-        myPostVote,
-        commentLikesScores,
-        commentMyVotes,
-      };
+      return await loadFullPostBundle(postId, currentUserId);
     } catch {
       return null;
     }
@@ -444,53 +322,35 @@ export const silentFetchPostDetails = createAsyncThunk(
 export const checkIncomingComments = createAsyncThunk(
   'posts/checkIncomingComments',
   async (_, { getState, dispatch }) => {
-    const { user, token, usersMap } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
+    const { user, usersMap } = getState().auth;
+    const currentUserId = user?.id;
     if (!currentUserId) return null;
 
     const { items, currentPost } = getState().posts;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
     const myPostsMap = new Map();
     items.forEach((p) => {
-      const aid = p.author_id || p.user_id || p.author?.id;
-      if (
-        Number(aid) === Number(currentUserId) ||
-        (user?.login && p.author_login === user.login) ||
-        (user?.dbLogin && p.author_login === user.dbLogin)
-      ) {
+      if (Number(p.author_id) === Number(currentUserId)) {
         myPostsMap.set(Number(p.id), p);
       }
     });
-    if (currentPost) {
-      const aid =
-        currentPost.author_id || currentPost.user_id || currentPost.author?.id;
-      if (
-        Number(aid) === Number(currentUserId) ||
-        (user?.login && currentPost.author_login === user.login) ||
-        (user?.dbLogin && currentPost.author_login === user.dbLogin)
-      ) {
-        myPostsMap.set(Number(currentPost.id), currentPost);
-      }
+    if (currentPost && Number(currentPost.author_id) === Number(currentUserId)) {
+      myPostsMap.set(Number(currentPost.id), currentPost);
     }
 
-    const myPosts = Array.from(myPostsMap.values());
+    const myPosts = Array.from(myPostsMap.values()).slice(0, 10);
     if (myPosts.length === 0) return null;
 
-    const storageKey = `usof_seen_comments_u_${currentUserId}`;
+    const storageKey = `usof_seen_u${currentUserId}`;
     const seenMap = loadFromStorage(storageKey, {});
 
     let newestAlert = null;
     const updatedPreviews = {};
 
-    const resolveCommentAuthorLogin = async (aid, fallbackLogin) => {
-      if (!aid) return fallbackLogin || 'User';
-      const overrideMap = loadFromStorage('usof_user_overrides_by_id', {});
-      if (overrideMap[String(aid)]?.login) {
-        return overrideMap[String(aid)].login;
-      }
-      if (usersMap[aid]?.login) {
-        return usersMap[aid].login;
+    const resolveCommentAuthorLogin = async (aid) => {
+      if (!aid) return 'User';
+      if (usersMap[String(aid)]?.login) {
+        return usersMap[String(aid)].login;
       }
       try {
         const res = await dispatch(fetchUserById(aid));
@@ -498,19 +358,14 @@ export const checkIncomingComments = createAsyncThunk(
       } catch {
         // Ignore
       }
-      return fallbackLogin || `user_${aid}`;
+      return `user_${aid}`;
     };
 
     await Promise.all(
       myPosts.map(async (post) => {
         try {
-          const res = await axios.get(`/api/posts/${post.id}/comments`, {
-            headers,
-          });
-          const comments = applyCommentsState(
-            Array.isArray(res.data) ? res.data : [],
-            post.id
-          );
+          const res = await api.get(`/posts/${post.id}/comments`);
+          const comments = Array.isArray(res.data) ? res.data : [];
           updatedPreviews[post.id] = comments;
 
           const seenForPost = Array.isArray(seenMap[post.id])
@@ -524,7 +379,7 @@ export const checkIncomingComments = createAsyncThunk(
             const newCommentsFromOthers = comments.filter(
               (c) =>
                 !knownSet.has(String(c.id)) &&
-                Number(c.author_id || c.user_id) !== Number(currentUserId)
+                Number(c.author_id) !== Number(currentUserId)
             );
 
             seenMap[post.id] = comments.map((c) => String(c.id));
@@ -532,11 +387,9 @@ export const checkIncomingComments = createAsyncThunk(
             if (newCommentsFromOthers.length > 0) {
               const latest =
                 newCommentsFromOthers[newCommentsFromOthers.length - 1];
-              const aid = latest.author_id || latest.user_id;
-              const resolvedLogin = await resolveCommentAuthorLogin(
-                aid,
-                latest.author_login
-              );
+              const aid = latest.author_id;
+              const resolvedLogin = await resolveCommentAuthorLogin(aid);
+              const { text: cleanContent } = parseCommentContent(latest.content);
               newestAlert = {
                 id: `${post.id}_${latest.id}_${Date.now()}`,
                 postId: post.id,
@@ -544,91 +397,63 @@ export const checkIncomingComments = createAsyncThunk(
                 commentId: latest.id,
                 authorId: aid,
                 authorLogin: resolvedLogin,
-                content: latest.content,
+                content: cleanContent,
                 publishDate: new Date().toISOString(),
               };
             }
           }
         } catch {
-          // Ignore network errors
+          // Ignore network errors during background poll
         }
       })
     );
 
     saveToStorage(storageKey, seenMap);
-
     return { updatedPreviews, newestAlert };
   }
 );
 
 export const createNewPost = createAsyncThunk(
   'posts/createNewPost',
-  async ({ title, content, categories }, { getState }) => {
-    const { token, user, language } = getState().auth;
+  async ({ title, content, categories }, { getState, rejectWithValue }) => {
+    const { token, user } = getState().auth;
+    if (!token || !user) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
+    }
+
     const allCategories = getState().posts.categories;
     const validCatIds = (categories || [])
       .map((id) => Number(id))
       .filter((id) => allCategories.some((c) => Number(c.id) === id));
 
-    const finalCatIds =
-      validCatIds.length > 0
-        ? validCatIds
-        : allCategories[0]?.id
-        ? [Number(allCategories[0].id)]
-        : [1];
-
-    const selectedCategoryObjects = allCategories.filter((c) =>
-      finalCatIds.includes(Number(c.id))
-    );
-
-    const createLocalFallbackPost = () => {
-      const localId = Date.now();
-      const guestName = language === 'en' ? 'Guest' : 'Гість';
-      const newLocalPost = {
-        id: localId,
-        author_id: user?.id || user?.userId || 0,
-        author_login: user?.login || user?.full_name || guestName,
-        title,
-        content,
-        status: 'active',
-        publish_date: new Date().toISOString(),
-        likes_count: 0,
-        comments_count: 0,
-        categories: selectedCategoryObjects,
-      };
-      const existingLocal = loadFromStorage('usof_local_posts', []);
-      saveToStorage('usof_local_posts', [newLocalPost, ...existingLocal]);
-      return { createdPost: newLocalPost };
-    };
-
-    if (!token) {
-      return createLocalFallbackPost();
+    if (validCatIds.length === 0) {
+      return rejectWithValue(toApiError(null, 'selectAtLeastOneCategoryError'));
     }
 
+    const selectedCategoryObjects = allCategories.filter((c) =>
+      validCatIds.includes(Number(c.id))
+    );
+
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const response = await axios.post(
-        '/api/posts',
-        { title, content, categories: finalCatIds },
-        { headers }
-      );
+      const response = await api.post('/posts', {
+        title,
+        content,
+        categories: validCatIds,
+      });
       const createdId = response.data?.postId || response.data?.id;
 
       let serverPost = null;
       if (createdId) {
         try {
-          const getRes = await axios.get(`/api/posts/${createdId}`, {
-            headers,
-          });
+          const getRes = await api.get(`/posts/${createdId}`);
           serverPost = getRes.data;
         } catch {
           serverPost = null;
         }
       }
 
-      const currentUserId = user?.id || user?.userId;
-      if (currentUserId && createdId) {
-        const storageKey = `usof_seen_comments_u_${currentUserId}`;
+      if (user?.id && createdId) {
+        const storageKey = `usof_seen_u${user.id}`;
         const seenMap = loadFromStorage(storageKey, {});
         seenMap[createdId] = [];
         saveToStorage(storageKey, seenMap);
@@ -637,367 +462,231 @@ export const createNewPost = createAsyncThunk(
       const immediateServerPost = {
         ...(serverPost || {}),
         id: createdId,
-        author_id: currentUserId || serverPost?.author_id,
-        author_login:
-          user?.login || user?.full_name || serverPost?.author_login,
+        author_id: user.id,
         title: serverPost?.title || title,
         content: serverPost?.content || content,
         status: serverPost?.status || 'active',
-        publish_date: new Date().toISOString(),
+        publish_date: serverPost?.publish_date || new Date().toISOString(),
         likes_count: 0,
-        comments_count: 0,
         categories: selectedCategoryObjects,
       };
 
       return { createdPost: immediateServerPost };
-    } catch {
-      return createLocalFallbackPost();
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
 
 export const updateExistingPost = createAsyncThunk(
   'posts/updateExistingPost',
-  async ({ postId, title, content, status, categories }, { getState }) => {
+  async ({ postId, title, content, status }, { getState, rejectWithValue }) => {
     const { token } = getState().auth;
-    const {
-      currentPost,
-      items,
-      categories: allCategories,
-    } = getState().posts;
-    const existingPost =
-      (currentPost && String(currentPost.id) === String(postId)
-        ? currentPost
-        : null) ||
-      items.find((p) => String(p.id) === String(postId)) ||
-      {};
-
-    const finalTitle = title !== undefined ? title : existingPost.title || '';
-    const finalContent =
-      content !== undefined ? content : existingPost.content || '';
-    const finalStatus =
-      status !== undefined ? status : existingPost.status || 'active';
-
-    const selectedCategoryObjects =
-      categories && categories.length > 0
-        ? allCategories.filter((c) => categories.includes(Number(c.id)))
-        : undefined;
-
-    const postOverrides = loadFromStorage('usof_post_overrides', {});
-    const existingOv = postOverrides[String(postId)] || {};
-    postOverrides[String(postId)] = {
-      ...existingOv,
-      title: finalTitle,
-      content: finalContent,
-      status: finalStatus,
-      categories: selectedCategoryObjects ?? existingOv.categories,
-    };
-    saveToStorage('usof_post_overrides', postOverrides);
-
-    if (token) {
-      const headers = { Authorization: `Bearer ${token}` };
-      try {
-        await axios.patch(
-          `/api/posts/${postId}`,
-          {
-            title: finalTitle,
-            content: finalContent,
-            status: finalStatus,
-            ...(categories && categories.length > 0 ? { categories } : {}),
-          },
-          { headers }
-        );
-      } catch {
-        // Saved in usof_post_overrides
-      }
+    if (!token) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
 
-    return {
-      postId,
-      title: finalTitle,
-      content: finalContent,
-      status: finalStatus,
-      categories: selectedCategoryObjects,
-    };
+    const payload = {};
+    if (title !== undefined) payload.title = title;
+    if (content !== undefined) payload.content = content;
+    if (status !== undefined) payload.status = status;
+
+    try {
+      await api.patch(`/posts/${postId}`, payload);
+      return { postId, ...payload };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    }
   }
 );
 
 export const deleteExistingPost = createAsyncThunk(
   'posts/deleteExistingPost',
-  async (postId, { getState }) => {
+  async (postId, { getState, rejectWithValue }) => {
     const { token } = getState().auth;
-
-    const deletedPosts = loadFromStorage('usof_deleted_posts', []);
-    if (!deletedPosts.includes(String(postId))) {
-      deletedPosts.push(String(postId));
-      saveToStorage('usof_deleted_posts', deletedPosts);
+    if (!token) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
 
-    const localPosts = loadFromStorage('usof_local_posts', []);
-    saveToStorage(
-      'usof_local_posts',
-      localPosts.filter((p) => String(p.id) !== String(postId))
-    );
-
-    if (token) {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        await axios.delete(`/api/posts/${postId}`, { headers });
-      } catch {
-        // Saved in usof_deleted_posts
-      }
+    try {
+      await api.delete(`/posts/${postId}`);
+      return postId;
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-    return postId;
   }
 );
 
 export const createComment = createAsyncThunk(
   'posts/createComment',
-  async ({ postId, content, parentCommentId = null }, { getState }) => {
-    const { token, user, language } = getState().auth;
-
-    const saveLocalComment = () => {
-      const newCommentId = Date.now();
-      const guestName = language === 'en' ? 'Guest' : 'Гість';
-      const localComment = {
-        id: newCommentId,
-        post_id: postId,
-        author_id: user?.id || user?.userId || 0,
-        author_login: user?.login || user?.full_name || guestName,
-        content,
-        status: 'active',
-        publish_date: new Date().toISOString(),
-        likes_count: 0,
-      };
-      const localMap = loadFromStorage('usof_local_comments', {});
-      const list = Array.isArray(localMap[String(postId)])
-        ? localMap[String(postId)]
-        : [];
-      localMap[String(postId)] = [...list, localComment];
-      saveToStorage('usof_local_comments', localMap);
-
-      const currentList = getState().posts.currentPostComments || [];
-      return {
-        postId,
-        serverComments: applyCommentsState(
-          [...currentList, localComment],
-          postId
-        ),
-        newCommentId,
-        parentCommentId,
-      };
-    };
-
-    if (!token) {
-      return saveLocalComment();
+  async ({ postId, content, parentCommentId = null }, { getState, rejectWithValue }) => {
+    const { token, user } = getState().auth;
+    if (!token || !user) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
 
+    const encodedContent = buildCommentContent(content, parentCommentId);
+
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const response = await axios.post(
-        `/api/posts/${postId}/comments`,
-        { content },
-        { headers }
-      );
-      const commentsRes = await axios.get(`/api/posts/${postId}/comments`, {
-        headers,
+      const response = await api.post(`/posts/${postId}/comments`, {
+        content: encodedContent,
       });
-      const rawServerComments = Array.isArray(commentsRes.data)
+      const commentsRes = await api.get(`/posts/${postId}/comments`);
+      const serverComments = Array.isArray(commentsRes.data)
         ? commentsRes.data
         : [];
       const newId =
         response.data?.commentId ||
         response.data?.id ||
-        rawServerComments[rawServerComments.length - 1]?.id;
+        serverComments[serverComments.length - 1]?.id;
 
       return {
         postId,
-        serverComments: applyCommentsState(rawServerComments, postId),
+        serverComments,
         newCommentId: newId,
-        parentCommentId,
       };
-    } catch {
-      return saveLocalComment();
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
 
 export const updateComment = createAsyncThunk(
   'posts/updateComment',
-  async ({ postId, commentId, content, status }, { getState }) => {
+  async ({ postId, commentId, content, status }, { getState, rejectWithValue }) => {
     const { token } = getState().auth;
+    if (!token) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
+    }
 
     const existingComment = getState().posts.currentPostComments.find(
       (c) => String(c.id) === String(commentId)
     );
-    const finalContent =
-      content !== undefined ? content : existingComment?.content || '';
-    const finalStatus =
-      status !== undefined ? status : existingComment?.status || 'active';
 
-    const overrides = loadFromStorage('usof_comment_overrides', {});
-    overrides[String(commentId)] = {
-      content: finalContent,
-      status: finalStatus,
-    };
-    saveToStorage('usof_comment_overrides', overrides);
-
-    if (token) {
-      const headers = { Authorization: `Bearer ${token}` };
-      try {
-        await axios.patch(
-          `/api/comments/${commentId}`,
-          status !== undefined && content === undefined
-            ? { status: finalStatus }
-            : { content: finalContent, status: finalStatus },
-          { headers }
-        );
-      } catch {
-        // Saved in usof_comment_overrides
-      }
+    const payload = {};
+    if (content !== undefined) {
+      const { parentId } = parseCommentContent(existingComment?.content);
+      payload.content = buildCommentContent(content, parentId);
+    }
+    if (status !== undefined) {
+      payload.status = status;
     }
 
-    return {
-      postId,
-      commentId,
-      content: finalContent,
-      status: finalStatus,
-    };
+    try {
+      await api.patch(`/comments/${commentId}`, payload);
+      return {
+        postId,
+        commentId,
+        content: payload.content ?? existingComment?.content,
+        status: payload.status ?? existingComment?.status,
+      };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    }
   }
 );
 
 export const deleteComment = createAsyncThunk(
   'posts/deleteComment',
-  async ({ postId, commentId }, { getState }) => {
+  async ({ postId, commentId }, { getState, rejectWithValue }) => {
     const { token } = getState().auth;
-
-    const deletedIds = loadFromStorage('usof_deleted_comments', []);
-    if (!deletedIds.includes(String(commentId))) {
-      deletedIds.push(String(commentId));
-      saveToStorage('usof_deleted_comments', deletedIds);
+    if (!token) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
 
-    if (token) {
-      try {
-        await axios.delete(`/api/comments/${commentId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {
-        // Saved in usof_deleted_comments
-      }
+    try {
+      await api.delete(`/comments/${commentId}`);
+      return { postId, commentId };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-
-    return { postId, commentId };
   }
 );
 
 export const votePost = createAsyncThunk(
   'posts/votePost',
-  async ({ postId, type }, { getState }) => {
+  async ({ postId, type }, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
-    const currentVote = getState().posts.userVotes[postId] || null;
-    const nextVote = currentVote === type ? null : type;
-
-    if (!token) {
-      return { postId, nextVote, serverScore: null };
+    if (!token || !user) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
+    const currentUserId = user.id;
+    const currentVote = getState().posts.userVotes[postId] || null;
 
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       if (currentVote === type) {
-        await axios.delete(`/api/posts/${postId}/like`, { headers });
+        await api.delete(`/posts/${postId}/like`);
       } else {
-        if (currentVote) {
-          try {
-            await axios.delete(`/api/posts/${postId}/like`, { headers });
-          } catch {
-            // Ignore
-          }
-        }
-        await axios.post(`/api/posts/${postId}/like`, { type }, { headers });
+        // Backend `Like.createOrUpdate` updates an existing vote in place
+        await api.post(`/posts/${postId}/like`, { type });
       }
 
-      const likesRes = await axios.get(`/api/posts/${postId}/like`, {
-        headers,
-      });
+      const likesRes = await api.get(`/posts/${postId}/like`);
       const parsed = parseLikesResponse(likesRes.data, currentUserId);
 
       return {
         postId,
-        nextVote,
+        nextVote: parsed.myVote,
         serverScore: parsed.score,
       };
-    } catch {
-      return { postId, nextVote, serverScore: null };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
 
 export const voteComment = createAsyncThunk(
   'posts/voteComment',
-  async ({ commentId, type }, { getState }) => {
+  async ({ commentId, type }, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
-    const currentUserId = user?.id || user?.userId;
-    const currentVote = getState().posts.commentVotes[commentId] || null;
-    const nextVote = currentVote === type ? null : type;
-
-    if (!token) {
-      return { commentId, nextVote, serverScore: null };
+    if (!token || !user) {
+      return rejectWithValue(toApiError(null, 'authRequiredToast'));
     }
+    const currentUserId = user.id;
+    const currentVote = getState().posts.commentVotes[commentId] || null;
 
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       if (currentVote === type) {
-        await axios.delete(`/api/comments/${commentId}/like`, { headers });
+        await api.delete(`/comments/${commentId}/like`);
       } else {
-        if (currentVote) {
-          try {
-            await axios.delete(`/api/comments/${commentId}/like`, { headers });
-          } catch {
-            // Ignore
-          }
-        }
-        await axios.post(
-          `/api/comments/${commentId}/like`,
-          { type },
-          { headers }
-        );
+        await api.post(`/comments/${commentId}/like`, { type });
       }
 
-      const likesRes = await axios.get(`/api/comments/${commentId}/like`, {
-        headers,
-      });
+      const likesRes = await api.get(`/comments/${commentId}/like`);
       const parsed = parseLikesResponse(likesRes.data, currentUserId);
 
       return {
         commentId,
-        nextVote,
+        nextVote: parsed.myVote,
         serverScore: parsed.score,
       };
-    } catch {
-      return { commentId, nextVote, serverScore: null };
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
+
+const makeToast = (key, type = 'success', detail = null) => ({
+  id: Date.now() + Math.random(),
+  key,
+  detail,
+  type,
+});
 
 const postsSlice = createSlice({
   name: 'posts',
   initialState: {
     items: [],
-    categoryOverrides: loadFromStorage('usof_post_cat_overrides', {}),
     categories: [],
     previewCommentsByPost: {},
     previewCategoriesByPost: {},
     postLikesMap: {},
     commentLikesMap: {},
-    postVoteFromServer: {},
-    commentVoteFromServer: {},
     status: 'idle',
     error: null,
+    apiConnected: true,
     page: 1,
-    limit: 10,
-    totalPages: 1,
+    limit: DEFAULT_PAGE_SIZE,
     paginationMode: 'pages',
     sortBy: 'date',
     order: 'DESC',
@@ -1018,24 +707,24 @@ const postsSlice = createSlice({
     notification: null,
     commentAlert: null,
     highlightedCommentId: null,
-    userVotes: loadFromStorage('usof_user_votes', {}),
-    commentVotes: loadFromStorage('usof_comment_votes', {}),
-    postReactions: loadFromStorage('usof_post_reactions', {}),
-    commentReactions: loadFromStorage('usof_comment_reactions', {}),
-    savedPosts: loadFromStorage('usof_saved_posts', {}),
-    commentParents: loadFromStorage('usof_comment_parents', {}),
-    siteStats: initSiteStats(),
+    userVotes: {},
+    commentVotes: {},
+    postReactions: loadFromStorage('usof_post_reactions_v2', {}),
+    commentReactions: loadFromStorage('usof_comment_reactions_v2', {}),
+    savedPostsByUser: loadFromStorage('usof_saved_by_user_v2', {}),
+    siteStats: registerVisit(),
   },
   reducers: {
     showNotification: (state, action) => {
-      state.notification = {
-        id: Date.now(),
-        message:
-          typeof action.payload === 'string'
-            ? action.payload
-            : action.payload?.message || 'Дію виконано!',
-        type: action.payload?.type || 'success',
-      };
+      if (typeof action.payload === 'string') {
+        state.notification = makeToast(action.payload, 'success');
+      } else {
+        state.notification = makeToast(
+          action.payload?.key || action.payload?.message || 'actionFailedError',
+          action.payload?.type || 'success',
+          action.payload?.detail || null
+        );
+      }
     },
     clearNotification: (state) => {
       state.notification = null;
@@ -1059,16 +748,23 @@ const postsSlice = createSlice({
       state.page = 1;
     },
     openPostPage: (state, action) => {
-      const postId = action.payload;
+      const postId = Number(action.payload);
       state.selectedPostId = postId;
 
-      state.siteStats.totalPostViews =
-        (state.siteStats.totalPostViews || 0) + 1;
-      state.siteStats.postViewsById = {
-        ...state.siteStats.postViewsById,
-        [postId]: (state.siteStats.postViewsById?.[postId] || 0) + 1,
+      state.siteStats.postViews = (state.siteStats.postViews || 0) + 1;
+      state.siteStats.viewsByPost = {
+        ...(state.siteStats.viewsByPost || {}),
+        [postId]: (state.siteStats.viewsByPost?.[postId] || 0) + 1,
       };
-      saveToStorage('usof_site_stats', state.siteStats);
+      storeSiteStats(state.siteStats);
+
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('post', String(postId));
+        window.history.replaceState({}, '', url.toString());
+      } catch {
+        // ignore history errors
+      }
     },
     closePostPage: (state) => {
       state.selectedPostId = null;
@@ -1078,6 +774,16 @@ const postsSlice = createSlice({
       state.postDetailsStatus = 'idle';
       state.postDetailsError = null;
       state.highlightedCommentId = null;
+
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('post')) {
+          url.searchParams.delete('post');
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch {
+        // ignore
+      }
     },
     setViewMode: (state, action) => {
       const mode = action.payload;
@@ -1102,7 +808,7 @@ const postsSlice = createSlice({
       state.page = 1;
     },
     setOrder: (state, action) => {
-      state.order = action.payload;
+      state.order = String(action.payload || 'DESC').toUpperCase();
       state.page = 1;
     },
     setCategoryId: (state, action) => {
@@ -1140,18 +846,18 @@ const postsSlice = createSlice({
       state.page = Math.max(1, Number(action.payload) || 1);
     },
     setLimit: (state, action) => {
-      state.limit = Number(action.payload);
+      state.limit = Number(action.payload) || DEFAULT_PAGE_SIZE;
       state.page = 1;
     },
     toggleReaction: (state, action) => {
-      const { postId, reactionId } = action.payload;
+      const { postId, reactionId, userId = 'guest' } = action.payload;
       const existing = state.postReactions[postId] || {
         counts: {},
-        userSelected: [],
+        byUser: {},
       };
-
-      const isSelected = existing.userSelected.includes(reactionId);
-      const currentCount = existing.counts[reactionId] || 0;
+      const userList = existing.byUser?.[userId] || [];
+      const isSelected = userList.includes(reactionId);
+      const currentCount = existing.counts?.[reactionId] || 0;
 
       const updatedCounts = {
         ...existing.counts,
@@ -1159,32 +865,30 @@ const postsSlice = createSlice({
           ? Math.max(0, currentCount - 1)
           : currentCount + 1,
       };
-
-      const updatedSelected = isSelected
-        ? existing.userSelected.filter((id) => id !== reactionId)
-        : [...existing.userSelected, reactionId];
+      const updatedUserList = isSelected
+        ? userList.filter((id) => id !== reactionId)
+        : [...userList, reactionId];
 
       state.postReactions[postId] = {
         counts: updatedCounts,
-        userSelected: updatedSelected,
+        byUser: { ...(existing.byUser || {}), [userId]: updatedUserList },
       };
 
-      saveToStorage('usof_post_reactions', state.postReactions);
-      state.notification = {
-        id: Date.now(),
-        message: isSelected ? 'Реакцію прибрано' : 'Реакцію додано!',
-        type: 'success',
-      };
+      saveToStorage('usof_post_reactions_v2', state.postReactions);
+      state.notification = makeToast(
+        isSelected ? 'reactionRemovedToast' : 'reactionAddedToast',
+        'success'
+      );
     },
     toggleCommentReaction: (state, action) => {
-      const { commentId, reactionId } = action.payload;
+      const { commentId, reactionId, userId = 'guest' } = action.payload;
       const existing = state.commentReactions[commentId] || {
         counts: {},
-        userSelected: [],
+        byUser: {},
       };
-
-      const isSelected = existing.userSelected.includes(reactionId);
-      const currentCount = existing.counts[reactionId] || 0;
+      const userList = existing.byUser?.[userId] || [];
+      const isSelected = userList.includes(reactionId);
+      const currentCount = existing.counts?.[reactionId] || 0;
 
       const updatedCounts = {
         ...existing.counts,
@@ -1192,121 +896,94 @@ const postsSlice = createSlice({
           ? Math.max(0, currentCount - 1)
           : currentCount + 1,
       };
-
-      const updatedSelected = isSelected
-        ? existing.userSelected.filter((id) => id !== reactionId)
-        : [...existing.userSelected, reactionId];
+      const updatedUserList = isSelected
+        ? userList.filter((id) => id !== reactionId)
+        : [...userList, reactionId];
 
       state.commentReactions[commentId] = {
         counts: updatedCounts,
-        userSelected: updatedSelected,
+        byUser: { ...(existing.byUser || {}), [userId]: updatedUserList },
       };
 
-      saveToStorage('usof_comment_reactions', state.commentReactions);
-      state.notification = {
-        id: Date.now(),
-        message: isSelected ? 'Реакцію прибрано' : 'Реакцію додано!',
-        type: 'success',
-      };
+      saveToStorage('usof_comment_reactions_v2', state.commentReactions);
+      state.notification = makeToast(
+        isSelected ? 'reactionRemovedToast' : 'reactionAddedToast',
+        'success'
+      );
     },
     toggleSavePost: (state, action) => {
-      const post = action.payload;
+      const { post, userId = 'guest' } = action.payload?.post
+        ? action.payload
+        : { post: action.payload, userId: 'guest' };
       if (!post || !post.id) return;
 
-      const wasSaved = Boolean(state.savedPosts[post.id]);
+      const bucketKey = String(userId || 'guest');
+      const currentBucket = { ...(state.savedPostsByUser[bucketKey] || {}) };
+      const wasSaved = Boolean(currentBucket[post.id]);
+
       if (wasSaved) {
-        delete state.savedPosts[post.id];
+        delete currentBucket[post.id];
       } else {
-        state.savedPosts[post.id] = post;
+        currentBucket[post.id] = post;
       }
 
-      saveToStorage('usof_saved_posts', state.savedPosts);
-      state.notification = {
-        id: Date.now(),
-        message: wasSaved
-          ? 'Питання видалено зі збережених'
-          : 'Питання додано до збережених!',
-        type: 'success',
-      };
+      state.savedPostsByUser[bucketKey] = currentBucket;
+      saveToStorage('usof_saved_by_user_v2', state.savedPostsByUser);
+
+      state.notification = makeToast(
+        wasSaved ? 'postUnsavedToast' : 'postSavedToast',
+        'success'
+      );
     },
   },
   extraReducers: (builder) => {
     builder
+      .addCase(checkApiHealth.fulfilled, (state, action) => {
+        state.apiConnected = action.payload;
+      })
       .addCase(fetchPosts.pending, (state) => {
         state.status = 'loading';
         state.error = null;
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const { data: payload, append } = action.payload;
-        let fetchedItems = [];
+        state.apiConnected = true;
+        const { data: payload } = action.payload;
+        const fetchedItems = Array.isArray(payload)
+          ? payload
+          : payload?.posts || payload?.data || [];
 
-        if (Array.isArray(payload)) {
-          fetchedItems = payload;
-        } else if (payload && Array.isArray(payload.posts)) {
-          fetchedItems = payload.posts;
-          state.totalPages = payload.totalPages || payload.pages || 1;
-        } else if (payload && Array.isArray(payload.data)) {
-          fetchedItems = payload.data;
-          state.totalPages = payload.totalPages || 1;
-        }
-
-        const deletedPosts = loadFromStorage('usof_deleted_posts', []);
-        const localPosts = loadFromStorage('usof_local_posts', []);
-
-        const combinedRaw = [...localPosts, ...fetchedItems];
         const seenIds = new Set();
-        const uniqueRaw = [];
-        combinedRaw.forEach((p) => {
-          if (
-            p &&
-            !deletedPosts.includes(String(p.id)) &&
-            !seenIds.has(String(p.id))
-          ) {
+        const unique = [];
+        fetchedItems.forEach((p) => {
+          if (p && !seenIds.has(String(p.id))) {
             seenIds.add(String(p.id));
-            uniqueRaw.push(applyPostState(p, state.categoryOverrides));
+            unique.push(p);
           }
         });
-
-        if (append && state.page > 1) {
-          const existingIds = new Set(state.items.map((p) => String(p.id)));
-          const uniqueNew = uniqueRaw.filter(
-            (p) => !existingIds.has(String(p.id))
-          );
-          state.items = [...state.items, ...uniqueNew];
-        } else {
-          state.items = uniqueRaw;
-        }
+        state.items = unique;
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload;
-      })
-      .addCase(fetchCategories.fulfilled, (state, action) => {
-        const payload = action.payload;
-        if (Array.isArray(payload)) {
-          state.categories = payload;
-        } else if (payload && Array.isArray(payload.categories)) {
-          state.categories = payload.categories;
-        } else if (payload && Array.isArray(payload.data)) {
-          state.categories = payload.data;
+        if (action.payload?.network) {
+          state.apiConnected = false;
         }
       })
+      .addCase(fetchCategories.fulfilled, (state, action) => {
+        state.categories = action.payload;
+        state.apiConnected = true;
+      })
       .addCase(createCategory.fulfilled, (state, action) => {
-        const newCat = action.payload;
-        state.categories.push(newCat);
-        state.notification = {
-          id: Date.now(),
-          message: `Категорію «${newCat.title}» успішно створено!`,
-          type: 'success',
-        };
+        state.categories.push(action.payload);
+        state.notification = makeToast('categoryCreatedToast', 'success');
       })
       .addCase(createCategory.rejected, (state, action) => {
-        state.notification = {
-          id: Date.now(),
-          message: action.payload || 'Помилка створення категорії',
-          type: 'error',
-        };
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(updateCategory.fulfilled, (state, action) => {
         const { categoryId, title, description } = action.payload;
@@ -1315,11 +992,14 @@ const postsSlice = createSlice({
             ? { ...c, title, description }
             : c
         );
-        state.notification = {
-          id: Date.now(),
-          message: `Категорію «${title}» успішно оновлено!`,
-          type: 'success',
-        };
+        state.notification = makeToast('categoryUpdatedToast', 'success');
+      })
+      .addCase(updateCategory.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(deleteCategory.fulfilled, (state, action) => {
         const catId = action.payload;
@@ -1329,36 +1009,30 @@ const postsSlice = createSlice({
         if (String(state.categoryId) === String(catId)) {
           state.categoryId = null;
         }
-        state.notification = {
-          id: Date.now(),
-          message: 'Категорію успішно видалено!',
-          type: 'success',
-        };
+        state.notification = makeToast('categoryDeletedToast', 'success');
+      })
+      .addCase(deleteCategory.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(fetchPostPreviewComments.fulfilled, (state, action) => {
         const { postId, comments, categories, likesScore, myVote } =
           action.payload;
         state.previewCommentsByPost[postId] = comments;
-
-        // Всегда устанавливаем массив (даже пустой), чтобы никогда не возникал бесконечный цикл
-        if (state.categoryOverrides[postId]) {
-          state.previewCategoriesByPost[postId] =
-            state.categoryOverrides[postId];
-        } else {
-          state.previewCategoriesByPost[postId] = Array.isArray(categories)
-            ? categories
-            : [];
-        }
+        state.previewCategoriesByPost[postId] = Array.isArray(categories)
+          ? categories
+          : [];
 
         if (likesScore !== null && likesScore !== undefined) {
           state.postLikesMap[postId] = likesScore;
-          state.postVoteFromServer[postId] = true;
           if (myVote) {
             state.userVotes[postId] = myVote;
           } else {
             delete state.userVotes[postId];
           }
-          saveToStorage('usof_user_votes', state.userVotes);
         }
       })
       .addCase(fetchPostDetails.pending, (state) => {
@@ -1367,17 +1041,14 @@ const postsSlice = createSlice({
       })
       .addCase(fetchPostDetails.fulfilled, (state, action) => {
         state.postDetailsStatus = 'succeeded';
-        const rawPost = action.payload.post;
-        const post = applyPostState(rawPost, state.categoryOverrides);
+        const post = action.payload.post;
         const postId = post?.id;
         state.currentPost = post;
-        state.currentPostCategories =
-          state.categoryOverrides[postId] ||
-          post?.categories ||
-          action.payload.categories;
+        state.currentPostCategories = action.payload.categories;
         state.currentPostComments = action.payload.comments;
         if (postId) {
           state.previewCommentsByPost[postId] = action.payload.comments;
+          state.previewCategoriesByPost[postId] = action.payload.categories;
         }
 
         if (
@@ -1386,13 +1057,11 @@ const postsSlice = createSlice({
           postId
         ) {
           state.postLikesMap[postId] = action.payload.postLikesScore;
-          state.postVoteFromServer[postId] = true;
           if (action.payload.myPostVote) {
             state.userVotes[postId] = action.payload.myPostVote;
           } else {
             delete state.userVotes[postId];
           }
-          saveToStorage('usof_user_votes', state.userVotes);
         }
 
         if (action.payload.commentLikesScores) {
@@ -1400,16 +1069,15 @@ const postsSlice = createSlice({
             ...state.commentLikesMap,
             ...action.payload.commentLikesScores,
           };
-          Object.keys(action.payload.commentLikesScores).forEach((cid) => {
-            state.commentVoteFromServer[cid] = true;
-          });
         }
         if (action.payload.commentMyVotes) {
-          state.commentVotes = {
-            ...state.commentVotes,
-            ...action.payload.commentMyVotes,
-          };
-          saveToStorage('usof_comment_votes', state.commentVotes);
+          Object.entries(action.payload.commentMyVotes).forEach(([cid, v]) => {
+            if (v) {
+              state.commentVotes[cid] = v;
+            } else {
+              delete state.commentVotes[cid];
+            }
+          });
         }
       })
       .addCase(fetchPostDetails.rejected, (state, action) => {
@@ -1418,10 +1086,7 @@ const postsSlice = createSlice({
       })
       .addCase(silentFetchPostDetails.fulfilled, (state, action) => {
         if (!action.payload || !action.payload.post) return;
-        const post = applyPostState(
-          action.payload.post,
-          state.categoryOverrides
-        );
+        const post = action.payload.post;
         const postId = post.id;
         if (String(state.selectedPostId) !== String(postId)) return;
 
@@ -1454,11 +1119,6 @@ const postsSlice = createSlice({
             if (String(state.selectedPostId) === String(pid)) {
               state.currentPostComments = comments;
             }
-            state.items = state.items.map((item) =>
-              String(item.id) === String(pid)
-                ? { ...item, comments_count: comments.length }
-                : item
-            );
           });
         }
         if (newestAlert) {
@@ -1471,8 +1131,6 @@ const postsSlice = createSlice({
           if (createdPost.categories && createdPost.categories.length > 0) {
             state.previewCategoriesByPost[createdPost.id] =
               createdPost.categories;
-            state.categoryOverrides[createdPost.id] = createdPost.categories;
-            saveToStorage('usof_post_cat_overrides', state.categoryOverrides);
           }
           const filtered = state.items.filter(
             (p) => String(p.id) !== String(createdPost.id)
@@ -1489,20 +1147,17 @@ const postsSlice = createSlice({
         }
         state.isAskModalOpen = false;
         state.editingPost = null;
-        state.notification = {
-          id: Date.now(),
-          message: 'Питання успішно опубліковано!',
-          type: 'success',
-        };
+        state.notification = makeToast('postCreatedToast', 'success');
+      })
+      .addCase(createNewPost.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(updateExistingPost.fulfilled, (state, action) => {
-        const { postId, title, content, status, categories } = action.payload;
-
-        if (categories && categories.length > 0) {
-          state.previewCategoriesByPost[postId] = categories;
-          state.categoryOverrides[postId] = categories;
-          saveToStorage('usof_post_cat_overrides', state.categoryOverrides);
-        }
+        const { postId, title, content, status } = action.payload;
 
         const updateItem = (item) => {
           if (String(item.id) !== String(postId)) return item;
@@ -1511,7 +1166,6 @@ const postsSlice = createSlice({
             title: title ?? item.title,
             content: content ?? item.content,
             status: status ?? item.status,
-            categories: categories ?? item.categories,
           };
         };
 
@@ -1522,68 +1176,60 @@ const postsSlice = createSlice({
           String(state.currentPost.id) === String(postId)
         ) {
           state.currentPost = updateItem(state.currentPost);
-          if (categories && categories.length > 0) {
-            state.currentPostCategories = categories;
-          }
-        }
-
-        if (state.savedPosts[postId]) {
-          state.savedPosts[postId] = updateItem(state.savedPosts[postId]);
-          saveToStorage('usof_saved_posts', state.savedPosts);
         }
 
         state.isAskModalOpen = false;
         state.editingPost = null;
-        state.notification = {
-          id: Date.now(),
-          message: 'Питання успішно відредаговано та збережено!',
-          type: 'success',
-        };
+        state.notification = makeToast('postUpdatedToast', 'success');
+      })
+      .addCase(updateExistingPost.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(deleteExistingPost.fulfilled, (state, action) => {
         const postId = String(action.payload);
         state.items = state.items.filter((p) => String(p.id) !== postId);
 
-        if (state.savedPosts[postId]) {
-          delete state.savedPosts[postId];
-          saveToStorage('usof_saved_posts', state.savedPosts);
-        }
+        Object.keys(state.savedPostsByUser).forEach((uid) => {
+          if (state.savedPostsByUser[uid]?.[postId]) {
+            delete state.savedPostsByUser[uid][postId];
+          }
+        });
+        saveToStorage('usof_saved_by_user_v2', state.savedPostsByUser);
 
         if (String(state.selectedPostId) === postId) {
           state.selectedPostId = null;
           state.currentPost = null;
         }
 
-        state.notification = {
-          id: Date.now(),
-          message: 'Питання успішно видалено!',
-          type: 'success',
-        };
+        state.notification = makeToast('postDeletedToast', 'success');
+      })
+      .addCase(deleteExistingPost.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(createComment.fulfilled, (state, action) => {
-        const { postId, serverComments, newCommentId, parentCommentId } =
-          action.payload;
-
-        if (parentCommentId && newCommentId) {
-          state.commentParents[newCommentId] = parentCommentId;
-          saveToStorage('usof_comment_parents', state.commentParents);
-        }
+        const { postId, serverComments } = action.payload;
 
         if (serverComments) {
           state.currentPostComments = serverComments;
           state.previewCommentsByPost[postId] = serverComments;
-          state.items = state.items.map((item) =>
-            String(item.id) === String(postId)
-              ? { ...item, comments_count: serverComments.length }
-              : item
-          );
         }
 
-        state.notification = {
-          id: Date.now(),
-          message: 'Відповідь успішно додано!',
-          type: 'success',
-        };
+        state.notification = makeToast('commentCreatedToast', 'success');
+      })
+      .addCase(createComment.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(updateComment.fulfilled, (state, action) => {
         const { postId, commentId, content, status } = action.payload;
@@ -1601,11 +1247,14 @@ const postsSlice = createSlice({
           state.previewCommentsByPost[postId] =
             state.previewCommentsByPost[postId].map(updater);
         }
-        state.notification = {
-          id: Date.now(),
-          message: 'Коментар успішно оновлено!',
-          type: 'success',
-        };
+        state.notification = makeToast('commentUpdatedToast', 'success');
+      })
+      .addCase(updateComment.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(deleteComment.fulfilled, (state, action) => {
         const { postId, commentId } = action.payload;
@@ -1618,87 +1267,126 @@ const postsSlice = createSlice({
           ].filter((c) => String(c.id) !== String(commentId));
         }
 
-        const remainingCount = state.currentPostComments.length;
-        state.items = state.items.map((item) =>
-          String(item.id) === String(postId)
-            ? { ...item, comments_count: remainingCount }
-            : item
+        state.notification = makeToast('commentDeletedToast', 'success');
+      })
+      .addCase(deleteComment.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
         );
-
-        state.notification = {
-          id: Date.now(),
-          message: 'Коментар успішно видалено!',
-          type: 'success',
-        };
       })
       .addCase(votePost.fulfilled, (state, action) => {
         const { postId, nextVote, serverScore } = action.payload;
-        if (nextVote === null) {
+        if (!nextVote) {
           delete state.userVotes[postId];
         } else {
           state.userVotes[postId] = nextVote;
         }
-        saveToStorage('usof_user_votes', state.userVotes);
 
         if (serverScore !== null && serverScore !== undefined) {
           state.postLikesMap[postId] = serverScore;
-          state.postVoteFromServer[postId] = true;
         }
-        state.notification = {
-          id: Date.now(),
-          message:
-            nextVote === 'like'
-              ? 'Вподобайку поставлено!'
-              : nextVote === 'dislike'
-              ? 'Дизлайк поставлено'
-              : 'Голос скасовано',
-          type: 'success',
-        };
+        state.notification = makeToast(
+          nextVote === 'like'
+            ? 'voteLikedToast'
+            : nextVote === 'dislike'
+            ? 'voteDislikedToast'
+            : 'voteRemovedToast',
+          'success'
+        );
+      })
+      .addCase(votePost.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(voteComment.fulfilled, (state, action) => {
         const { commentId, nextVote, serverScore } = action.payload;
-        if (nextVote === null) {
+        if (!nextVote) {
           delete state.commentVotes[commentId];
         } else {
           state.commentVotes[commentId] = nextVote;
         }
-        saveToStorage('usof_comment_votes', state.commentVotes);
 
         if (serverScore !== null && serverScore !== undefined) {
           state.commentLikesMap[commentId] = serverScore;
-          state.commentVoteFromServer[commentId] = true;
         }
-        state.notification = {
-          id: Date.now(),
-          message:
-            nextVote === 'like'
-              ? 'Коментар вподобано!'
-              : nextVote === 'dislike'
-              ? 'Оцінку збережено'
-              : 'Оцінку коментаря скасовано',
-          type: 'success',
-        };
+        state.notification = makeToast(
+          nextVote === 'like'
+            ? 'voteLikedToast'
+            : nextVote === 'dislike'
+            ? 'voteDislikedToast'
+            : 'voteRemovedToast',
+          'success'
+        );
+      })
+      .addCase(voteComment.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
+      })
+      .addCase(loginUser.fulfilled, (state) => {
+        state.userVotes = {};
+        state.commentVotes = {};
+        state.notification = makeToast('loginSuccessToast', 'success');
       })
       .addCase(logoutUser.fulfilled, (state) => {
-        state.notification = {
-          id: Date.now(),
-          message: 'Ви вийшли з акаунту',
-          type: 'success',
-        };
+        state.userVotes = {};
+        state.commentVotes = {};
+        if (state.statusFilter !== 'active') {
+          state.statusFilter = 'active';
+        }
+        state.notification = makeToast('logoutSuccessToast', 'success');
+      })
+      .addCase(handleSessionExpired, (state) => {
+        state.userVotes = {};
+        state.commentVotes = {};
+        state.notification = makeToast('sessionExpiredToast', 'error');
       })
       .addCase(updateUserProfile.fulfilled, (state) => {
-        state.notification = {
-          id: Date.now(),
-          message: 'Профіль успішно оновлено!',
-          type: 'success',
-        };
+        state.notification = makeToast('profileSavedToast', 'success');
+      })
+      .addCase(updateUserProfile.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       })
       .addCase(uploadUserAvatar.fulfilled, (state) => {
-        state.notification = {
-          id: Date.now(),
-          message: 'Фото профілю успішно оновлено!',
-          type: 'success',
-        };
+        state.notification = makeToast('avatarUpdatedToast', 'success');
+      })
+      .addCase(uploadUserAvatar.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
+      })
+      .addCase(adminCreateUser.fulfilled, (state) => {
+        state.notification = makeToast('userCreatedToast', 'success');
+      })
+      .addCase(adminCreateUser.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'registerFailedError',
+          'error',
+          action.payload?.detail
+        );
+      })
+      .addCase(adminDeleteUser.fulfilled, (state) => {
+        state.notification = makeToast('userDeletedToast', 'success');
+      })
+      .addCase(adminDeleteUser.rejected, (state, action) => {
+        state.notification = makeToast(
+          action.payload?.key || 'actionFailedError',
+          'error',
+          action.payload?.detail
+        );
       });
   },
 });

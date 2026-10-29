@@ -1,136 +1,41 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import api, {
+  TOKEN_KEY,
+  parseJwt,
+  isTokenExpired,
+  toApiError,
+} from '../api/client';
+import { cleanupLegacyStorage } from '../utils/storage';
 
-const parseJwt = (token) => {
+cleanupLegacyStorage();
+
+const USER_CACHE_KEY = 'usof_current_user';
+const pendingUserRequests = new Set();
+
+const loadCachedUser = () => {
   try {
-    if (!token || !token.includes('.')) return null;
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      window
-        .atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token || isTokenExpired(token)) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_CACHE_KEY);
+      return null;
+    }
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 };
 
-const getProfileOverrides = () => {
+const saveCachedUser = (user) => {
   try {
-    return JSON.parse(localStorage.getItem('usof_profile_overrides') || '{}');
-  } catch {
-    return {};
-  }
-};
-
-const saveProfileOverride = (userId, data) => {
-  if (!userId) return;
-  try {
-    const overrides = getProfileOverrides();
-    overrides[String(userId)] = { ...(overrides[String(userId)] || {}), ...data };
-    localStorage.setItem('usof_profile_overrides', JSON.stringify(overrides));
+    if (user) {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(USER_CACHE_KEY);
+    }
   } catch {
     // ignore storage errors
-  }
-};
-
-const DEFAULT_KNOWN_USERS = [
-  { login: 'admin', email: 'admin@example.com' },
-  { login: 'admin_usof', email: 'admin@usof.com' },
-  { login: 'test@gmail.com', email: 'test@gmail.com' },
-  { login: 'testcaser', email: 'tescaser@gmail.com' },
-  { login: 'snake1111', email: 'snake126@gmail.com' },
-  { login: 'python1111', email: 'python126@gmail.com' },
-];
-
-const getKnownUsersDirectory = () => {
-  try {
-    const saved = JSON.parse(localStorage.getItem('usof_known_users') || '[]');
-    const map = new Map();
-    [...DEFAULT_KNOWN_USERS, ...(Array.isArray(saved) ? saved : [])].forEach((u) => {
-      if (u && (u.login || u.email)) {
-        const key = `${(u.login || '').toLowerCase()}|${(u.email || '').toLowerCase()}`;
-        map.set(key, { login: u.login, email: u.email });
-      }
-    });
-    return Array.from(map.values());
-  } catch {
-    return DEFAULT_KNOWN_USERS;
-  }
-};
-
-const rememberUsersInDirectory = (usersList) => {
-  try {
-    const current = getKnownUsersDirectory();
-    const incoming = Array.isArray(usersList) ? usersList : [usersList];
-    const map = new Map();
-    [...current, ...incoming].forEach((u) => {
-      if (u && u.login && u.email) {
-        map.set(String(u.login).toLowerCase(), {
-          login: String(u.login).trim(),
-          email: String(u.email).trim(),
-        });
-      }
-    });
-    localStorage.setItem('usof_known_users', JSON.stringify(Array.from(map.values())));
-  } catch {
-    // ignore
-  }
-};
-
-const resolveLoginAndEmail = async (identifier) => {
-  const clean = String(identifier || '').trim();
-  const lower = clean.toLowerCase();
-
-  try {
-    const token = localStorage.getItem('usof_token');
-    const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-    const res = await axios.get('/api/users', { headers });
-    const list = Array.isArray(res.data) ? res.data : res.data?.users || res.data?.data || [];
-    if (Array.isArray(list) && list.length > 0) {
-      rememberUsersInDirectory(list);
-      const found = list.find(
-        (u) =>
-          String(u.login || '').toLowerCase() === lower ||
-          String(u.email || '').toLowerCase() === lower
-      );
-      if (found && found.login && found.email) {
-        return { login: found.login, email: found.email };
-      }
-    }
-  } catch {
-    // fallback to local directory if GET /api/users requires auth
-  }
-
-  const known = getKnownUsersDirectory();
-  const matched = known.find(
-    (u) =>
-      String(u.login || '').toLowerCase() === lower ||
-      String(u.email || '').toLowerCase() === lower
-  );
-  if (matched && matched.login && matched.email) {
-    return { login: matched.login, email: matched.email };
-  }
-
-  return { login: clean, email: clean };
-};
-
-const loadStoredUser = () => {
-  try {
-    const raw = localStorage.getItem('usof_user');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed?.id) {
-      const overrides = getProfileOverrides()[String(parsed.id)];
-      return overrides ? { ...parsed, ...overrides } : parsed;
-    }
-    return parsed;
-  } catch {
-    return null;
   }
 };
 
@@ -138,25 +43,35 @@ export const verifySession = createAsyncThunk(
   'auth/verifySession',
   async (_, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
-    if (!token || !user?.id) return null;
+    if (!token || isTokenExpired(token)) {
+      localStorage.removeItem(TOKEN_KEY);
+      saveCachedUser(null);
+      return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
+    }
+
+    const payload = parseJwt(token);
+    const userId = payload?.userId || payload?.id || user?.id;
+    if (!userId) {
+      localStorage.removeItem(TOKEN_KEY);
+      saveCachedUser(null);
+      return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
+    }
 
     try {
-      const headers = token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-      const res = await axios.get(`/api/users/${user.id}`, { headers });
+      const res = await api.get(`/users/${userId}`);
       const fetched = res.data?.user || res.data?.data || res.data;
-      if (!fetched || (!fetched.id && !fetched.login)) {
-        return rejectWithValue('User not found');
+      if (!fetched || !fetched.id) {
+        localStorage.removeItem(TOKEN_KEY);
+        saveCachedUser(null);
+        return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
       }
-      const overrides = getProfileOverrides()[String(user.id)] || {};
-      const merged = { ...user, ...fetched, ...overrides };
-      rememberUsersInDirectory([merged]);
-      localStorage.setItem('usof_user', JSON.stringify(merged));
-      return merged;
-    } catch (err) {
-      if (err.response?.status === 404 || err.response?.status === 401) {
-        localStorage.removeItem('usof_token');
-        localStorage.removeItem('usof_user');
-        return rejectWithValue('Session expired');
+      saveCachedUser(fetched);
+      return fetched;
+    } catch (error) {
+      if (error.response?.status === 404 || error.response?.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        saveCachedUser(null);
+        return rejectWithValue(toApiError(error, 'sessionExpiredToast'));
       }
       return user;
     }
@@ -165,24 +80,35 @@ export const verifySession = createAsyncThunk(
 
 export const fetchUserById = createAsyncThunk(
   'auth/fetchUserById',
-  async (userId, { getState, rejectWithValue }) => {
+  async (userId, { rejectWithValue }) => {
     if (!userId) return rejectWithValue('No user ID');
     try {
-      const { token } = getState().auth;
-      const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-      const res = await axios.get(`/api/users/${userId}`, { headers });
+      const res = await api.get(`/users/${userId}`);
       const fetched = res.data?.user || res.data?.data || res.data;
-      const overrides = getProfileOverrides()[String(userId)] || {};
-      const merged = { ...(fetched || {}), ...overrides, id: fetched?.id || userId };
-      rememberUsersInDirectory([merged]);
-      return merged;
-    } catch (err) {
-      const overrides = getProfileOverrides()[String(userId)];
-      if (overrides) {
-        return { id: userId, ...overrides };
+      if (!fetched || !fetched.id) {
+        return { id: Number(userId), _notFound: true };
       }
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch user');
+      return fetched;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return { id: Number(userId), _notFound: true };
+      }
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
+    } finally {
+      pendingUserRequests.delete(String(userId));
     }
+  },
+  {
+    condition: (userId, { getState }) => {
+      if (!userId) return false;
+      const key = String(userId);
+      const existing = getState().auth.usersMap[key];
+      if (existing || pendingUserRequests.has(key)) {
+        return false;
+      }
+      pendingUserRequests.add(key);
+      return true;
+    },
   }
 );
 
@@ -190,89 +116,30 @@ export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ identifier, login, email, password }, { rejectWithValue }) => {
     try {
-      const rawIdentifier = (identifier || login || email || '').trim();
-      const resolved = await resolveLoginAndEmail(rawIdentifier);
+      const rawIdentifier = String(identifier || login || email || '').trim();
+      // Backend checks `WHERE login = ? OR email = ?`, so passing rawIdentifier
+      // to both fields lets the user sign in with either login or email.
+      const response = await api.post('/auth/login', {
+        login: rawIdentifier,
+        email: rawIdentifier,
+        password,
+      });
 
-      let response;
-      try {
-        response = await axios.post('/api/auth/login', {
-          login: resolved.login,
-          email: resolved.email,
-          password,
-        });
-      } catch (firstErr) {
-        if (resolved.login !== rawIdentifier || resolved.email !== rawIdentifier) {
-          response = await axios.post('/api/auth/login', {
-            login: rawIdentifier,
-            email: rawIdentifier,
-            password,
-          });
-        } else {
-          throw firstErr;
-        }
-      }
-
-      const data = response.data || {};
-      const token = data.token || data.accessToken || data.jwt || 'session-active';
+      const token = response.data?.token;
       const jwtPayload = parseJwt(token);
-
-      let userObj = data.user || data.data || null;
-      const userId = userObj?.id || data.userId || data.id || jwtPayload?.id || jwtPayload?.userId;
-
-      if (userId) {
-        try {
-          const headers = token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-          const profileRes = await axios.get(`/api/users/${userId}`, { headers });
-          const fullProfile = profileRes.data?.user || profileRes.data?.data || profileRes.data;
-          if (fullProfile && typeof fullProfile === 'object') {
-            userObj = { ...(userObj || {}), ...fullProfile };
-          }
-        } catch {
-          // ignore
-        }
+      if (!token || !jwtPayload?.userId) {
+        return rejectWithValue(toApiError(null, 'loginFailedError'));
       }
 
-      if (!userObj || typeof userObj !== 'object') {
-        userObj = {
-          id: userId || Date.now(),
-          login: resolved.login || rawIdentifier,
-          email: resolved.email || (rawIdentifier.includes('@') ? rawIdentifier : ''),
-          full_name: resolved.login || rawIdentifier,
-          role:
-            jwtPayload?.role ||
-            (String(resolved.login).toLowerCase().includes('admin') ? 'admin' : 'user'),
-          rating: 0,
-        };
-      }
+      localStorage.setItem(TOKEN_KEY, token);
 
-      const overrides = userObj.id ? getProfileOverrides()[String(userObj.id)] : null;
-      if (overrides) {
-        userObj = { ...userObj, ...overrides };
-      }
+      const profileRes = await api.get(`/users/${jwtPayload.userId}`);
+      const userObj = profileRes.data;
 
-      rememberUsersInDirectory([userObj]);
-
-      if (userObj.role === 'admin') {
-        try {
-          const headers = token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-          const allRes = await axios.get('/api/users', { headers });
-          const allList = Array.isArray(allRes.data) ? allRes.data : allRes.data?.users || [];
-          rememberUsersInDirectory(allList);
-        } catch {
-          // ignore
-        }
-      }
-
-      localStorage.setItem('usof_token', token);
-      localStorage.setItem('usof_user', JSON.stringify(userObj));
-
+      saveCachedUser(userObj);
       return { token, user: userObj };
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Невірний логін/email або пароль'
-      );
+      return rejectWithValue(toApiError(error, 'loginFailedError'));
     }
   }
 );
@@ -283,40 +150,43 @@ export const registerUser = createAsyncThunk(
     try {
       const cleanLogin = login.trim();
       const cleanEmail = email.trim();
-      const cleanFullName = (fullName || cleanLogin).trim();
+      const cleanFullName = (fullName || '').trim();
 
-      const response = await axios.post('/api/auth/register', {
+      const response = await api.post('/auth/register', {
         login: cleanLogin,
         email: cleanEmail,
-        full_name: cleanFullName,
-        fullName: cleanFullName,
         password,
         password_confirmation: passwordConfirmation,
-        passwordConfirmation,
       });
 
-      rememberUsersInDirectory([{ login: cleanLogin, email: cleanEmail }]);
+      // Remember desired full name until the user signs in so we can sync it
+      // via PATCH /api/users/:id if needed.
+      if (cleanFullName && cleanFullName !== cleanLogin) {
+        try {
+          sessionStorage.setItem(
+            `usof_pending_fullname_${cleanLogin.toLowerCase()}`,
+            cleanFullName
+          );
+        } catch {
+          // ignore
+        }
+      }
+
       return response.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Помилка реєстрації. Перевірте унікальність логіна та email.'
-      );
+      return rejectWithValue(toApiError(error, 'registerFailedError'));
     }
   }
 );
 
-export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { getState }) => {
+export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   try {
-    const token = getState().auth.token;
-    const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-    await axios.post('/api/auth/logout', {}, { headers });
+    await api.post('/auth/logout', {});
   } catch {
-    // ignore
+    // Even if server token is already expired, clear client session.
   } finally {
-    localStorage.removeItem('usof_token');
-    localStorage.removeItem('usof_user');
+    localStorage.removeItem(TOKEN_KEY);
+    saveCachedUser(null);
   }
   return null;
 });
@@ -325,14 +195,10 @@ export const requestPasswordReset = createAsyncThunk(
   'auth/requestPasswordReset',
   async ({ email }, { rejectWithValue }) => {
     try {
-      const res = await axios.post('/api/auth/password-reset', { email: email.trim() });
+      const res = await api.post('/auth/password-reset', { email: email.trim() });
       return res.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Не вдалося відправити лист для скидання пароля'
-      );
+      return rejectWithValue(toApiError(error, 'resetRequestFailedError'));
     }
   }
 );
@@ -341,207 +207,148 @@ export const confirmPasswordReset = createAsyncThunk(
   'auth/confirmPasswordReset',
   async ({ token, newPassword }, { rejectWithValue }) => {
     try {
-      const res = await axios.post(`/api/auth/password-reset/${token.trim()}`, {
+      const res = await api.post(`/auth/password-reset/${encodeURIComponent(token.trim())}`, {
         new_password: newPassword,
-        newPassword,
-        password: newPassword,
       });
       return res.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Недійсний токен або помилка зміни пароля'
-      );
+      return rejectWithValue(toApiError(error, 'resetConfirmFailedError'));
     }
   }
 );
 
 export const updateUserProfile = createAsyncThunk(
   'auth/updateUserProfile',
-  async ({ userId, login, full_name, email }, { getState }) => {
-    const { token, user } = getState().auth;
-    const targetId = userId || user?.id;
-    const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-    const payload = {
-      login: login?.trim() || user?.login,
-      full_name: full_name?.trim(),
-      fullName: full_name?.trim(),
-      email: email?.trim() || user?.email,
-    };
+  async ({ userId, full_name, email }, { getState, rejectWithValue }) => {
+    const { user } = getState().auth;
+    const targetId = Number(userId || user?.id);
+    const cleanFullName = full_name?.trim();
+    const cleanEmail = email?.trim();
 
-    let updatedFromServer = {};
     try {
-      const res = await axios.patch(`/api/users/${targetId}`, payload, { headers });
-      updatedFromServer = res.data?.user || res.data?.data || res.data || {};
-    } catch {
-      // save locally if PATCH fails
+      await api.patch(`/users/${targetId}`, {
+        full_name: cleanFullName,
+        email: cleanEmail,
+      });
+
+      const refreshed = await api.get(`/users/${targetId}`);
+      const updatedUser = refreshed.data;
+
+      if (user && Number(user.id) === targetId) {
+        saveCachedUser(updatedUser);
+      }
+      return updatedUser;
+    } catch (error) {
+      // Backend returns 404 when values are identical to current DB row
+      if (
+        error.response?.status === 404 &&
+        String(error.response?.data?.error || '').includes('no changes')
+      ) {
+        const refreshed = await api.get(`/users/${targetId}`);
+        return refreshed.data;
+      }
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-
-    const finalData = {
-      ...user,
-      ...(typeof updatedFromServer === 'object' ? updatedFromServer : {}),
-      id: targetId,
-      login: payload.login,
-      full_name: payload.full_name,
-      email: payload.email,
-    };
-
-    saveProfileOverride(targetId, {
-      login: payload.login,
-      full_name: payload.full_name,
-      email: payload.email,
-    });
-    rememberUsersInDirectory([finalData]);
-    localStorage.setItem('usof_user', JSON.stringify(finalData));
-    return finalData;
   }
 );
 
 export const uploadUserAvatar = createAsyncThunk(
   'auth/uploadUserAvatar',
-  async (file, { getState }) => {
-    const { token, user } = getState().auth;
-    const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
+  async (file, { getState, rejectWithValue }) => {
+    const { user } = getState().auth;
     const formData = new FormData();
     formData.append('avatar', file);
 
     try {
-      const res = await axios.patch('/api/users/avatar', formData, {
-        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+      const res = await api.patch('/users/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const serverAvatar =
+      const filename =
+        res.data?.filename ||
         res.data?.profile_picture ||
-        res.data?.avatar ||
-        res.data?.user?.profile_picture ||
-        res.data?.user?.avatar;
+        res.data?.avatar;
 
-      if (serverAvatar) {
-        const updated = { ...user, profile_picture: serverAvatar, avatar: serverAvatar };
-        saveProfileOverride(user?.id, { profile_picture: serverAvatar, avatar: serverAvatar });
-        localStorage.setItem('usof_user', JSON.stringify(updated));
-        return updated;
+      if (!filename) {
+        return rejectWithValue(toApiError(null, 'actionFailedError'));
       }
-    } catch {
-      // fallback to base64 DataURL
+
+      const updated = { ...user, profile_picture: filename };
+      saveCachedUser(updated);
+      return updated;
+    } catch (error) {
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
-
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const updated = { ...user, profile_picture: dataUrl, avatar: dataUrl };
-    saveProfileOverride(user?.id, { profile_picture: dataUrl, avatar: dataUrl });
-    localStorage.setItem('usof_user', JSON.stringify(updated));
-    return updated;
   }
 );
 
 export const fetchAllUsers = createAsyncThunk(
   'auth/fetchAllUsers',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { token } = getState().auth;
-      const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-      const res = await axios.get('/api/users', { headers });
-      const list = Array.isArray(res.data) ? res.data : res.data?.users || res.data?.data || [];
-      rememberUsersInDirectory(list);
-      return list;
+      const res = await api.get('/users');
+      return Array.isArray(res.data) ? res.data : [];
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Не вдалося завантажити користувачів');
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
 
 export const adminCreateUser = createAsyncThunk(
   'auth/adminCreateUser',
-  async ({ login, email, password, role }, { getState, dispatch, rejectWithValue }) => {
+  async ({ login, email, password, passwordConfirmation, role }, { dispatch, rejectWithValue }) => {
     try {
-      const { token } = getState().auth;
-      const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
       const cleanLogin = login.trim();
       const cleanEmail = email.trim();
-      const res = await axios.post(
-        '/api/users',
-        {
-          login: cleanLogin,
-          email: cleanEmail,
-          password,
-          password_confirmation: password,
-          passwordConfirmation: password,
-          role: role || 'user',
-        },
-        { headers }
-      );
-      rememberUsersInDirectory([{ login: cleanLogin, email: cleanEmail }]);
+      const res = await api.post('/users', {
+        login: cleanLogin,
+        email: cleanEmail,
+        password,
+        password_confirmation: passwordConfirmation || password,
+        role: role || 'user',
+      });
       dispatch(fetchAllUsers());
       return res.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Помилка створення користувача'
-      );
+      return rejectWithValue(toApiError(error, 'registerFailedError'));
     }
-  }
-);
-
-export const adminUpdateUserRole = createAsyncThunk(
-  'auth/adminUpdateUserRole',
-  async ({ userId, role }, { getState }) => {
-    const { token } = getState().auth;
-    const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-    try {
-      await axios.patch(`/api/users/${userId}`, { role }, { headers });
-    } catch {
-      // fallback in state
-    }
-    return { userId, role };
   }
 );
 
 export const adminDeleteUser = createAsyncThunk(
   'auth/adminDeleteUser',
-  async (userId, { getState, rejectWithValue }) => {
+  async (userId, { getState, dispatch, rejectWithValue }) => {
     try {
-      const { token } = getState().auth;
-      const headers = token && token !== 'session-active' ? { Authorization: `Bearer ${token}` } : {};
-      await axios.delete(`/api/users/${userId}`, { headers });
-      return userId;
+      await api.delete(`/users/${userId}`);
+      const currentId = getState().auth.user?.id;
+      if (Number(currentId) === Number(userId)) {
+        dispatch(logoutUser());
+      }
+      return Number(userId);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Помилка видалення користувача');
+      return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
   }
 );
 
-const initialUser = loadStoredUser();
-const initialOverrides = getProfileOverrides();
-const initialUsersMap = { ...initialOverrides };
-if (initialUser?.id) {
-  initialUsersMap[String(initialUser.id)] = initialUser;
-}
+const initialUser = loadCachedUser();
+const initialToken = initialUser ? localStorage.getItem(TOKEN_KEY) : null;
+const initialUsersMap = initialUser?.id ? { [String(initialUser.id)]: initialUser } : {};
 
 const initialState = {
   user: initialUser,
-  token: localStorage.getItem('usof_token') || null,
-  isAuthenticated: !!localStorage.getItem('usof_token') && !!initialUser,
+  token: initialToken,
+  isAuthenticated: Boolean(initialToken && initialUser),
   language: localStorage.getItem('usof_lang') || 'uk',
   loading: false,
   error: null,
   registrationSuccess: false,
-  resetSuccessMessage: null,
+  resetSuccessKey: null,
   isAuthModalOpen: false,
   authModalMode: 'login',
-  authModalTab: 'login',
   resetTokenFromUrl: '',
-  isProfilePageOpen: false,
+  isProfileOpen: false,
   viewedProfileUser: null,
-  viewedUserProfile: null,
   allUsers: [],
-  usersList: [],
   usersMap: initialUsersMap,
 };
 
@@ -562,42 +369,37 @@ const authSlice = createSlice({
       if (action.payload) {
         state.isAuthModalOpen = true;
         state.authModalMode = 'reset';
-        state.authModalTab = 'reset';
       }
     },
     openAuthModal: (state, action) => {
       const mode = action.payload || 'login';
       state.isAuthModalOpen = true;
       state.authModalMode = mode;
-      state.authModalTab = mode;
       state.error = null;
       state.registrationSuccess = false;
-      state.resetSuccessMessage = null;
+      state.resetSuccessKey = null;
     },
     closeAuthModal: (state) => {
       state.isAuthModalOpen = false;
       state.error = null;
       state.registrationSuccess = false;
-      state.resetSuccessMessage = null;
+      state.resetSuccessKey = null;
     },
     switchAuthMode: (state, action) => {
       state.authModalMode = action.payload;
-      state.authModalTab = action.payload;
       state.error = null;
       state.registrationSuccess = false;
-      state.resetSuccessMessage = null;
+      state.resetSuccessKey = null;
     },
     openProfilePage: (state, action) => {
-      state.isProfilePageOpen = true;
+      state.isProfileOpen = true;
       state.viewedProfileUser = action.payload || null;
-      state.viewedUserProfile = action.payload || null;
     },
     openUserProfile: (state, action) => {
-      state.isProfilePageOpen = true;
+      state.isProfileOpen = true;
       const payload = action.payload;
       if (payload && typeof payload === 'object') {
         state.viewedProfileUser = payload;
-        state.viewedUserProfile = payload;
         if (payload.id) {
           state.usersMap[String(payload.id)] = {
             ...(state.usersMap[String(payload.id)] || {}),
@@ -605,21 +407,30 @@ const authSlice = createSlice({
           };
         }
       } else if (payload) {
-        const cached = state.usersMap[String(payload)] || { id: payload, login: `user_${payload}` };
+        const cached = state.usersMap[String(payload)] || {
+          id: Number(payload),
+          login: `user_${payload}`,
+        };
         state.viewedProfileUser = cached;
-        state.viewedUserProfile = cached;
       } else {
         state.viewedProfileUser = null;
-        state.viewedUserProfile = null;
       }
     },
     closeProfilePage: (state) => {
-      state.isProfilePageOpen = false;
+      state.isProfileOpen = false;
       state.viewedProfileUser = null;
-      state.viewedUserProfile = null;
     },
     clearAuthError: (state) => {
       state.error = null;
+    },
+    handleSessionExpired: (state) => {
+      localStorage.removeItem(TOKEN_KEY);
+      saveCachedUser(null);
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.isProfileOpen = false;
+      state.viewedProfileUser = null;
     },
   },
   extraReducers: (builder) => {
@@ -645,9 +456,12 @@ const authSlice = createSlice({
             ...(state.usersMap[String(u.id)] || {}),
             ...u,
           };
-          if (state.viewedProfileUser && Number(state.viewedProfileUser.id) === Number(u.id)) {
+          if (
+            state.viewedProfileUser &&
+            Number(state.viewedProfileUser.id) === Number(u.id) &&
+            !u._notFound
+          ) {
             state.viewedProfileUser = { ...state.viewedProfileUser, ...u };
-            state.viewedUserProfile = { ...state.viewedUserProfile, ...u };
           }
         }
       })
@@ -678,7 +492,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.registrationSuccess = true;
         state.authModalMode = 'login';
-        state.authModalTab = 'login';
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
@@ -688,18 +501,17 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
-        state.isProfilePageOpen = false;
+        state.isProfileOpen = false;
         state.viewedProfileUser = null;
-        state.viewedUserProfile = null;
       })
       .addCase(requestPasswordReset.pending, (state) => {
         state.loading = true;
         state.error = null;
-        state.resetSuccessMessage = null;
+        state.resetSuccessKey = null;
       })
       .addCase(requestPasswordReset.fulfilled, (state) => {
         state.loading = false;
-        state.resetSuccessMessage = 'Інструкції для відновлення пароля відправлено на ваш email';
+        state.resetSuccessKey = 'resetLinkSentToast';
       })
       .addCase(requestPasswordReset.rejected, (state, action) => {
         state.loading = false;
@@ -711,9 +523,8 @@ const authSlice = createSlice({
       })
       .addCase(confirmPasswordReset.fulfilled, (state) => {
         state.loading = false;
-        state.resetSuccessMessage = 'Пароль успішно змінено! Тепер ви можете увійти.';
+        state.resetSuccessKey = 'passwordChangedToast';
         state.authModalMode = 'login';
-        state.authModalTab = 'login';
         state.resetTokenFromUrl = '';
       })
       .addCase(confirmPasswordReset.rejected, (state, action) => {
@@ -721,40 +532,53 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
       .addCase(updateUserProfile.fulfilled, (state, action) => {
-        state.user = action.payload;
-        if (action.payload?.id) {
-          state.usersMap[String(action.payload.id)] = action.payload;
+        const updated = action.payload;
+        if (!updated?.id) return;
+        state.usersMap[String(updated.id)] = updated;
+        if (state.user && Number(state.user.id) === Number(updated.id)) {
+          state.user = updated;
         }
+        if (
+          state.viewedProfileUser &&
+          Number(state.viewedProfileUser.id) === Number(updated.id)
+        ) {
+          state.viewedProfileUser = updated;
+        }
+        state.allUsers = state.allUsers.map((u) =>
+          Number(u.id) === Number(updated.id) ? updated : u
+        );
       })
       .addCase(uploadUserAvatar.fulfilled, (state, action) => {
         state.user = action.payload;
         if (action.payload?.id) {
           state.usersMap[String(action.payload.id)] = action.payload;
         }
+        if (
+          state.viewedProfileUser &&
+          Number(state.viewedProfileUser.id) === Number(action.payload?.id)
+        ) {
+          state.viewedProfileUser = action.payload;
+        }
       })
       .addCase(fetchAllUsers.fulfilled, (state, action) => {
         state.allUsers = action.payload;
-        state.usersList = action.payload;
         action.payload.forEach((u) => {
           if (u?.id) {
-            state.usersMap[String(u.id)] = { ...(state.usersMap[String(u.id)] || {}), ...u };
+            state.usersMap[String(u.id)] = u;
           }
         });
       })
-      .addCase(adminUpdateUserRole.fulfilled, (state, action) => {
-        const { userId, role } = action.payload;
-        state.allUsers = state.allUsers.map((u) =>
-          Number(u.id) === Number(userId) ? { ...u, role } : u
-        );
-        state.usersList = state.allUsers;
-        if (state.usersMap[String(userId)]) {
-          state.usersMap[String(userId)].role = role;
-        }
-      })
       .addCase(adminDeleteUser.fulfilled, (state, action) => {
-        state.allUsers = state.allUsers.filter((u) => Number(u.id) !== Number(action.payload));
-        state.usersList = state.allUsers;
-        delete state.usersMap[String(action.payload)];
+        const deletedId = Number(action.payload);
+        state.allUsers = state.allUsers.filter((u) => Number(u.id) !== deletedId);
+        delete state.usersMap[String(deletedId)];
+        if (
+          state.viewedProfileUser &&
+          Number(state.viewedProfileUser.id) === deletedId
+        ) {
+          state.isProfileOpen = false;
+          state.viewedProfileUser = null;
+        }
       });
   },
 });
@@ -769,6 +593,7 @@ export const {
   openUserProfile,
   closeProfilePage,
   clearAuthError,
+  handleSessionExpired,
 } = authSlice.actions;
 
 export default authSlice.reducer;

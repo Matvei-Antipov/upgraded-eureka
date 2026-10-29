@@ -1,20 +1,12 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useMemo,
-  useCallback,
-} from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   fetchPosts,
+  fetchCategories,
   fetchPostPreviewComments,
-  openAskModal,
-  openPostPage,
-  setViewMode,
   setSortBy,
-  setCategoryId,
   setOrder,
+  setCategoryId,
   setStatusFilter,
   setStartDate,
   setEndDate,
@@ -22,34 +14,37 @@ import {
   setPage,
   setLimit,
   setPaginationMode,
+  setViewMode,
   votePost,
   toggleReaction,
   toggleSavePost,
+  openAskModal,
+  openPostPage,
   showNotification,
   REACTION_TYPES,
 } from '../../store/postsSlice';
 import {
   openAuthModal,
-  fetchAllUsers,
   fetchUserById,
   openUserProfile,
 } from '../../store/authSlice';
 import { translations } from '../../i18n/translations';
+import { PAGE_SIZE_OPTIONS } from '../../config';
+import { avatarUrl, getInitials, formatDate } from '../../utils/format';
+import { parseCommentContent } from '../../utils/comments';
+import RichContent from '../RichContent/RichContent';
 import './PostFeed.css';
 
 const PostFeed = () => {
   const dispatch = useDispatch();
-  const { user, language, usersMap } = useSelector((state) => state.auth);
   const {
-    items: posts,
-    categories,
-    previewCommentsByPost,
-    previewCategoriesByPost,
-    postLikesMap,
-    postVoteFromServer,
-    commentLikesMap,
-    commentVoteFromServer,
-    status: postStatus,
+    items = [],
+    categories = [],
+    previewCommentsByPost = {},
+    previewCategoriesByPost = {},
+    postLikesMap = {},
+    commentLikesMap = {},
+    status,
     error,
     page,
     limit,
@@ -62,1073 +57,711 @@ const PostFeed = () => {
     endDate,
     searchQuery,
     viewMode,
-    userVotes,
-    commentVotes,
-    postReactions,
-    savedPosts,
-    siteStats,
+    userVotes = {},
+    postReactions = {},
+    savedPostsByUser = {},
+    siteStats = { visits: 1, postViews: 0 },
   } = useSelector((state) => state.posts);
 
+  const { user, language = 'uk', usersMap = {} } = useSelector(
+    (state) => state.auth
+  );
   const t = translations[language] || translations.uk;
   const isAdmin = user?.role === 'admin';
-  const savedCount = Object.keys(savedPosts || {}).length;
 
-  const [activeSharePostId, setActiveSharePostId] = useState(null);
-  const [activeReactionPickerPostId, setActiveReactionPickerPostId] =
-    useState(null);
-  const [customPageInput, setCustomPageInput] = useState('1');
-  const [infiniteVisibleCount, setInfiniteVisibleCount] = useState(3);
+  const [openReactionPostId, setOpenReactionPostId] = useState(null);
+  const [openSharePostId, setOpenSharePostId] = useState(null);
+  const [pageInput, setPageInput] = useState(page || 1);
 
-  const shareMenuRef = useRef(null);
-  const reactionMenuRef = useRef(null);
-  const requestedUserIdsRef = useRef(new Set());
-  const requestedPreviewIdsRef = useRef(new Set());
+  const bucketKey = String(user?.id || 'guest');
+  const userSavedMap = useMemo(
+    () => savedPostsByUser?.[bucketKey] || {},
+    [savedPostsByUser, bucketKey]
+  );
 
   useEffect(() => {
-    if (!isAdmin && statusFilter !== 'active') {
-      dispatch(setStatusFilter('active'));
-    }
-  }, [isAdmin, statusFilter, dispatch]);
-
-  useEffect(() => {
-    dispatch(fetchAllUsers());
+    dispatch(fetchCategories());
   }, [dispatch]);
 
   useEffect(() => {
-    dispatch(fetchPosts(false));
-  }, [dispatch, statusFilter]);
-
-  // Запрашиваем превью комментариев и категорий строго 1 раз для каждого поста (без бесконечного цикла)
-  useEffect(() => {
-    posts.forEach((post) => {
-      if (post?.id && !requestedPreviewIdsRef.current.has(post.id)) {
-        requestedPreviewIdsRef.current.add(post.id);
-        dispatch(fetchPostPreviewComments(post.id));
-      }
-    });
-  }, [dispatch, posts]);
-
-  // Запрашиваем авторов строго 1 раз для каждого ID
-  useEffect(() => {
-    posts.forEach((post) => {
-      const aid = post.author_id || post.user_id;
-      if (aid && !requestedUserIdsRef.current.has(aid)) {
-        requestedUserIdsRef.current.add(aid);
-        dispatch(fetchUserById(aid));
-      }
-    });
-  }, [dispatch, posts]);
+    dispatch(fetchPosts());
+  }, [
+    dispatch,
+    sortBy,
+    order,
+    categoryId,
+    statusFilter,
+    startDate,
+    endDate,
+    isAdmin,
+  ]);
 
   useEffect(() => {
-    setCustomPageInput(String(page));
+    setPageInput(page);
   }, [page]);
 
-  useEffect(() => {
-    if (paginationMode === 'infinite') {
-      setInfiniteVisibleCount(3);
-    }
-  }, [paginationMode, categoryId, viewMode, sortBy, order]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        shareMenuRef.current &&
-        !shareMenuRef.current.contains(event.target)
-      ) {
-        setActiveSharePostId(null);
-      }
-      if (
-        reactionMenuRef.current &&
-        !reactionMenuRef.current.contains(event.target)
-      ) {
-        setActiveReactionPickerPostId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const requireAuth = () => {
-    if (!user) {
-      dispatch(showNotification({ message: t.authRequiredToast }));
-      dispatch(openAuthModal('login'));
-      return false;
-    }
-    return true;
-  };
-
-  const handleOpenAuthorProfile = (post) => {
-    const authorId = post.author_id || post.user_id || post.author?.id;
-    const mappedUser = authorId ? usersMap[authorId] : null;
-    if (authorId) {
-      dispatch(fetchUserById(authorId));
-    }
-    dispatch(
-      openUserProfile(
-        mappedUser || {
-          id: authorId || 0,
-          login:
-            post.author?.login ||
-            post.author_login ||
-            `${t.userPrefix} #${authorId || 1}`,
-          full_name: post.author?.full_name || post.author_name || '',
-          role: 'user',
-        }
-      )
-    );
-  };
-
-  const getPostRatingDelta = useCallback(
-    (postId) => {
-      const vote = userVotes[postId];
-      let voteDelta = 0;
-      if (!postVoteFromServer[postId]) {
-        if (vote === 'like') voteDelta = 1;
-        if (vote === 'dislike') voteDelta = -1;
-      }
-
-      const reactionsData = postReactions[postId]?.counts || {};
-      const reactionsDelta = REACTION_TYPES.reduce((sum, r) => {
-        const count = reactionsData[r.id] || 0;
-        return sum + count * r.weight;
-      }, 0);
-
-      return {
-        voteDelta,
-        reactionsDelta,
-        totalDelta: voteDelta + reactionsDelta,
-      };
-    },
-    [userVotes, postVoteFromServer, postReactions]
+  const savedPostsArray = useMemo(
+    () =>
+      Object.values(userSavedMap).filter(
+        (p) => p && typeof p === 'object' && p.id
+      ),
+    [userSavedMap]
   );
 
-  const getPostEffectiveScore = useCallback(
-    (post) => {
-      const baseLikes = Number(
-        postLikesMap[post.id] ??
-          post.likes_count ??
-          post.likesCount ??
-          post.rating ??
-          0
-      );
-      const { totalDelta } = getPostRatingDelta(post.id);
-      return baseLikes + totalDelta;
-    },
-    [postLikesMap, getPostRatingDelta]
+  const savedIdsSet = useMemo(
+    () => new Set(Object.keys(userSavedMap).map((k) => Number(k))),
+    [userSavedMap]
   );
 
-  const getVisiblePreviewComments = useCallback(
-    (postId) => {
-      const rawList = previewCommentsByPost[postId];
-      if (!Array.isArray(rawList)) return undefined;
-      if (isAdmin) return rawList;
-      return rawList.filter((c) => c.status !== 'inactive');
-    },
-    [previewCommentsByPost, isAdmin]
-  );
+  const savedCount = savedIdsSet.size;
 
-  const getMostLikedComment = (postId) => {
-    const list = getVisiblePreviewComments(postId) || [];
-    if (list.length === 0) return null;
+  const displayedPosts = useMemo(() => {
+    let source = viewMode === 'saved' ? savedPostsArray : items;
 
-    let best = list[0];
-    let bestScore = -Infinity;
-
-    list.forEach((c) => {
-      const base = Number(
-        commentLikesMap[c.id] ?? c.likes_count ?? c.likesCount ?? c.rating ?? 0
-      );
-      const v = commentVotes[c.id];
-      const delta = commentVoteFromServer[c.id]
-        ? 0
-        : v === 'like'
-        ? 1
-        : v === 'dislike'
-        ? -1
-        : 0;
-      const score = base + delta;
-      if (score > bestScore) {
-        bestScore = score;
-        best = c;
+    source = source.filter((post) => {
+      if (!post) return false;
+      if (post.status === 'inactive') {
+        const authorId = Number(post.author_id);
+        return isAdmin || (user && Number(user.id) === authorId);
       }
+      return true;
     });
 
-    return { comment: best, score: bestScore };
-  };
-
-  const sourcePosts = useMemo(() => {
-    if (viewMode === 'saved') {
-      return Object.values(savedPosts || {});
+    if (isAdmin && statusFilter && statusFilter !== 'all') {
+      source = source.filter((p) => (p.status || 'active') === statusFilter);
     }
-    return posts;
-  }, [viewMode, posts, savedPosts]);
 
-  const authorRatingsMap = useMemo(() => {
-    const map = {};
-    sourcePosts.forEach((post) => {
-      if (!isAdmin && post.status === 'inactive') return;
+    if (categoryId && viewMode === 'saved') {
+      source = source.filter((post) => {
+        const cats =
+          previewCategoriesByPost[post.id] ||
+          (Array.isArray(post.categories) ? post.categories : []);
+        return cats.some(
+          (c) => Number(typeof c === 'object' ? c.id : c) === Number(categoryId)
+        );
+      });
+    }
 
-      const authorKey =
-        post.author_id ||
-        post.user_id ||
-        post.author?.login ||
-        post.author_login ||
-        'unknown';
-
-      const effectivePostScore = getPostEffectiveScore(post);
-
-      const initialAuthorRating = Number(
-        usersMap[post.author_id]?.rating ?? post.author?.rating ?? 0
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      source = source.filter(
+        (p) =>
+          String(p.title || '').toLowerCase().includes(q) ||
+          String(p.content || '').toLowerCase().includes(q)
       );
-      if (map[authorKey] === undefined) {
-        map[authorKey] = initialAuthorRating;
-      }
-      map[authorKey] = Math.max(map[authorKey], effectivePostScore);
-    });
-    return map;
-  }, [sourcePosts, isAdmin, getPostEffectiveScore, usersMap]);
+    }
 
-  const selectedCategoryObj = useMemo(
-    () => categories.find((c) => Number(c.id) === Number(categoryId)),
-    [categories, categoryId]
-  );
+    if (startDate) {
+      const startMs = new Date(`${startDate}T00:00:00`).getTime();
+      source = source.filter((p) => {
+        const d = new Date(p.publish_date || 0).getTime();
+        return d >= startMs;
+      });
+    }
 
-  const filteredPosts = useMemo(() => {
-    const filtered = sourcePosts.filter((post) => {
-      if (!isAdmin && post.status === 'inactive') {
-        return false;
-      }
-      if (
-        isAdmin &&
-        statusFilter === 'active' &&
-        post.status === 'inactive' &&
-        viewMode !== 'saved'
-      ) {
-        return false;
-      }
-      if (
-        isAdmin &&
-        statusFilter === 'inactive' &&
-        post.status !== 'inactive' &&
-        viewMode !== 'saved'
-      ) {
-        return false;
-      }
+    if (endDate) {
+      const endMs = new Date(`${endDate}T23:59:59.999`).getTime();
+      source = source.filter((p) => {
+        const d = new Date(p.publish_date || 0).getTime();
+        return d <= endMs;
+      });
+    }
 
-      if (categoryId && viewMode !== 'saved') {
-        const postCats =
-          previewCategoriesByPost[post.id] !== undefined
-            ? previewCategoriesByPost[post.id]
-            : Array.isArray(post.categories)
-            ? post.categories
-            : [];
+    if (viewMode === 'unanswered') {
+      source = source.filter((p) => {
+        const comments = previewCommentsByPost[p.id];
+        if (Array.isArray(comments)) {
+          return comments.length === 0;
+        }
+        return Number(p.comments_count || 0) === 0;
+      });
+    }
 
-        const targetCatTitle = (
-          selectedCategoryObj?.title ||
-          selectedCategoryObj?.name ||
-          ''
-        )
-          .trim()
-          .toLowerCase();
-
-        const matchesCat = postCats.some((cat) => {
-          if (typeof cat === 'object' && cat !== null) {
-            if (Number(cat.id) === Number(categoryId)) return true;
-            const cTitle = (cat.title || cat.name || '').trim().toLowerCase();
-            return Boolean(targetCatTitle && cTitle === targetCatTitle);
-          }
-          if (Number(cat) === Number(categoryId)) return true;
-          return Boolean(
-            targetCatTitle && String(cat).trim().toLowerCase() === targetCatTitle
-          );
-        });
-
-        if (!matchesCat) return false;
-      }
-
-      if ((startDate || endDate) && viewMode !== 'saved') {
-        const rawDate =
-          post.publish_date ||
-          post.publishDate ||
-          post.created_at ||
-          post.createdAt;
-        if (rawDate) {
-          const postTime = new Date(rawDate).getTime();
-          if (!Number.isNaN(postTime)) {
-            if (startDate) {
-              const startTime = new Date(`${startDate}T00:00:00`).getTime();
-              if (postTime < startTime) return false;
-            }
-            if (endDate) {
-              const endTime = new Date(`${endDate}T23:59:59`).getTime();
-              if (postTime > endTime) return false;
-            }
-          }
+    const isAsc = String(order || 'DESC').toUpperCase() === 'ASC';
+    const sorted = [...source].sort((a, b) => {
+      if (sortBy === 'likes' || viewMode === 'popular') {
+        const likesA = Number(postLikesMap[a.id] ?? a.likes_count ?? 0);
+        const likesB = Number(postLikesMap[b.id] ?? b.likes_count ?? 0);
+        if (likesA !== likesB) {
+          return isAsc ? likesA - likesB : likesB - likesA;
         }
       }
-
-      const visibleComments = getVisiblePreviewComments(post.id);
-      const commentsCount = Number(
-        visibleComments !== undefined
-          ? visibleComments.length
-          : post.comments_count ?? post.commentsCount ?? 0
-      );
-
-      if (viewMode === 'unanswered' && commentsCount > 0) {
-        return false;
-      }
-
-      if (!searchQuery.trim()) return true;
-      const query = searchQuery.toLowerCase();
-      const titleMatch = post.title?.toLowerCase().includes(query);
-      const contentMatch = post.content?.toLowerCase().includes(query);
-      return titleMatch || contentMatch;
-    });
-
-    const getPostTimestamp = (p) => {
-      const raw =
-        p.publish_date || p.publishDate || p.created_at || p.createdAt;
-      const parsed = raw ? new Date(raw).getTime() : 0;
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'date') {
-        const timeA = getPostTimestamp(a);
-        const timeB = getPostTimestamp(b);
-        if (timeA !== timeB) {
-          return order === 'ASC' ? timeA - timeB : timeB - timeA;
-        }
-        return order === 'ASC'
-          ? Number(a.id || 0) - Number(b.id || 0)
-          : Number(b.id || 0) - Number(a.id || 0);
-      }
-
-      const scoreA = getPostEffectiveScore(a);
-      const scoreB = getPostEffectiveScore(b);
-      if (scoreA !== scoreB) {
-        return order === 'ASC' ? scoreA - scoreB : scoreB - scoreA;
-      }
-
-      const timeA = getPostTimestamp(a);
-      const timeB = getPostTimestamp(b);
-      return timeB - timeA;
+      const dateA = new Date(a.publish_date || 0).getTime();
+      const dateB = new Date(b.publish_date || 0).getTime();
+      return isAsc ? dateA - dateB : dateB - dateA;
     });
 
     return sorted;
   }, [
-    sourcePosts,
+    viewMode,
+    savedPostsArray,
+    items,
+    user,
     isAdmin,
     statusFilter,
-    viewMode,
     categoryId,
-    selectedCategoryObj,
     previewCategoriesByPost,
+    searchQuery,
     startDate,
     endDate,
-    getVisiblePreviewComments,
-    searchQuery,
+    previewCommentsByPost,
     sortBy,
     order,
-    getPostEffectiveScore,
+    postLikesMap,
   ]);
 
-  const computedTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredPosts.length / limit)),
-    [filteredPosts.length, limit]
+  const totalPages = Math.max(
+    1,
+    Math.ceil(displayedPosts.length / (Number(limit) || 10))
   );
 
-  const displayedPosts = useMemo(() => {
-    if (viewMode === 'saved') {
-      return filteredPosts;
-    }
-    if (paginationMode === 'infinite') {
-      return filteredPosts.slice(0, infiniteVisibleCount);
-    }
-    const startIndex = (page - 1) * limit;
-    return filteredPosts.slice(startIndex, startIndex + limit);
-  }, [filteredPosts, viewMode, paginationMode, infiniteVisibleCount, page, limit]);
+  const safePage = Math.min(Math.max(1, page), totalPages);
 
-  const handleLoadMoreClick = () => {
-    if (infiniteVisibleCount < filteredPosts.length) {
-      setInfiniteVisibleCount((prev) => prev + 3);
-    } else {
-      dispatch(showNotification({ message: t.allQuestionsLoadedToast }));
+  const paginatedPosts = useMemo(() => {
+    const perPage = Number(limit) || 10;
+    if (paginationMode === 'infinite') {
+      return displayedPosts.slice(0, safePage * perPage);
+    }
+    const startIdx = (safePage - 1) * perPage;
+    return displayedPosts.slice(startIdx, startIdx + perPage);
+  }, [displayedPosts, paginationMode, safePage, limit]);
+
+  useEffect(() => {
+    const targets =
+      viewMode === 'unanswered' ? displayedPosts.slice(0, 40) : paginatedPosts;
+    targets.forEach((post) => {
+      if (post?.id) {
+        dispatch(fetchPostPreviewComments(post.id));
+      }
+      const authorId = post?.author_id;
+      if (authorId) {
+        dispatch(fetchUserById(authorId));
+      }
+    });
+  }, [paginatedPosts, displayedPosts, viewMode, dispatch]);
+
+  const handleAuthorClick = (e, post) => {
+    e.stopPropagation();
+    const authorId = post.author_id;
+    const cachedUser = authorId ? usersMap[String(authorId)] : null;
+    if (cachedUser && !cachedUser._notFound) {
+      dispatch(openUserProfile(cachedUser));
+    } else if (authorId) {
+      dispatch(fetchUserById(authorId));
+      dispatch(
+        openUserProfile({
+          id: authorId,
+          login: post.author_login || `user_${authorId}`,
+        })
+      );
     }
   };
 
+  const handleVote = (e, postId, voteType) => {
+    e.stopPropagation();
+    if (!user) {
+      dispatch(openAuthModal('login'));
+      return;
+    }
+    dispatch(votePost({ postId, type: voteType }));
+  };
+
+  const handleAskClick = () => {
+    if (!user) {
+      dispatch(openAuthModal('login'));
+      return;
+    }
+    dispatch(openAskModal(null));
+  };
+
+  const handleShare = (e, post, platform) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/?post=${post.id}`;
+    if (platform === 'copy' || platform === 'instagram') {
+      navigator.clipboard?.writeText(url);
+      dispatch(
+        showNotification(
+          platform === 'instagram' ? 'instagramCopiedToast' : 'linkCopiedToast'
+        )
+      );
+    } else if (platform === 'telegram') {
+      window.open(
+        `https://t.me/share/url?url=${encodeURIComponent(
+          url
+        )}&text=${encodeURIComponent(post.title)}`,
+        '_blank'
+      );
+    } else if (platform === 'facebook') {
+      window.open(
+        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          url
+        )}`,
+        '_blank'
+      );
+    }
+    setOpenSharePostId(null);
+  };
+
   if (viewMode === 'stats') {
-    const totalReactionsGiven = Object.values(postReactions || {}).reduce(
-      (acc, item) =>
-        acc +
-        Object.values(item.counts || {}).reduce(
-          (s, c) => s + Number(c || 0),
-          0
-        ),
+    const totalReactions = Object.values(postReactions || {}).reduce(
+      (acc, entry) => {
+        if (!entry) return acc;
+        const countsObj = entry.counts || {};
+        return (
+          acc +
+          Object.values(countsObj).reduce(
+            (s, v) => s + (typeof v === 'number' ? v : 0),
+            0
+          )
+        );
+      },
       0
     );
 
     return (
       <section className="post-feed">
-        <div className="feed-header">
-          <div>
-            <h1 className="feed-title">{t.statsTitle}</h1>
-            <p className="feed-subtitle">{t.statsSubtitle}</p>
+        <div className="stats-page-card">
+          <div className="stats-header">
+            <div>
+              <h1 className="feed-title">{t.statsTitle}</h1>
+              <p className="feed-subtitle">{t.statsSubtitle}</p>
+            </div>
+            <button
+              type="button"
+              className="ask-btn"
+              onClick={() => dispatch(setViewMode('all'))}
+            >
+              {t.backToQuestions}
+            </button>
           </div>
-          <button
-            type="button"
-            className="ask-btn"
-            onClick={() => dispatch(setViewMode('all'))}
-          >
-            {t.backToQuestions}
-          </button>
-        </div>
 
-        <div className="stats-grid">
-          <div className="stat-card">
-            <span className="stat-label">{t.statVisits}</span>
-            <span className="stat-value">{siteStats.totalVisits || 1}</span>
+          <div className="stats-grid">
+            <div className="stat-box">
+              <span className="stat-value">
+                {siteStats.visits || siteStats.totalVisits || 1}
+              </span>
+              <span className="stat-label">{t.statVisits}</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">
+                {siteStats.postViews || siteStats.totalPostViews || 0}
+              </span>
+              <span className="stat-label">{t.statViews}</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">{items.length}</span>
+              <span className="stat-label">{t.statPosts}</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">{categories.length}</span>
+              <span className="stat-label">{t.statCategories}</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">{totalReactions}</span>
+              <span className="stat-label">{t.statReactions}</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">{savedCount}</span>
+              <span className="stat-label">{t.statSaved}</span>
+            </div>
           </div>
-          <div className="stat-card">
-            <span className="stat-label">{t.statViews}</span>
-            <span className="stat-value">{siteStats.totalPostViews || 0}</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">{t.statPosts}</span>
-            <span className="stat-value">{filteredPosts.length}</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">{t.statCategories}</span>
-            <span className="stat-value">{categories.length}</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">{t.statReactions}</span>
-            <span className="stat-value">
-              {totalReactionsGiven + Object.keys(userVotes || {}).length}
-            </span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">{t.statSaved}</span>
-            <span className="stat-value">{savedCount}</span>
-          </div>
+
+          <p className="feed-subtitle" style={{ marginTop: '14px' }}>
+            {t.statsLocalNote}
+          </p>
         </div>
       </section>
     );
   }
 
-  const handleVote = async (post, type) => {
-    if (!requireAuth()) return;
-    await dispatch(votePost({ postId: post.id, type }));
-  };
-
-  const handleReactionSelect = (postId, reactionObj) => {
-    dispatch(toggleReaction({ postId, reactionId: reactionObj.id }));
-    setActiveReactionPickerPostId(null);
-  };
-
-  const handleToggleBookmark = (post) => {
-    dispatch(toggleSavePost(post));
-  };
-
-  const getPostShareUrl = (postId) => {
-    return `${window.location.origin}/posts/${postId}`;
-  };
-
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Fallback
-    }
-    dispatch(
-      showNotification({
-        message:
-          language === 'en'
-            ? 'Link copied to clipboard!'
-            : 'Посилання скопійовано!',
-      })
-    );
-    setActiveSharePostId(null);
-  };
-
-  const handleSocialShare = (platform, post) => {
-    const postUrl = getPostShareUrl(post.id);
-    const encodedUrl = encodeURIComponent(postUrl);
-    const encodedTitle = encodeURIComponent(post.title || 'USOF');
-
-    let shareUrl = '';
-    if (platform === 'facebook') {
-      shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedTitle}`;
-    } else if (platform === 'telegram') {
-      shareUrl = `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
-    } else if (platform === 'twitter') {
-      shareUrl = `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`;
-    } else if (platform === 'instagram') {
-      copyToClipboard(postUrl);
-      return;
-    }
-
-    if (shareUrl) {
-      window.open(
-        shareUrl,
-        '_blank',
-        'noopener,noreferrer,width=600,height=500'
-      );
-      setActiveSharePostId(null);
-    }
-  };
-
-  const formatPublishDate = (dateValue) => {
-    if (!dateValue) return t.justNow;
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) return dateValue;
-    return date.toLocaleDateString(language === 'en' ? 'en-US' : 'uk-UA', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const handleGoToSpecificPage = (e) => {
-    e.preventDefault();
-    const num = parseInt(customPageInput, 10);
-    if (!Number.isNaN(num) && num >= 1 && num <= computedTotalPages) {
-      dispatch(setPage(num));
-    }
-  };
+  const activeCategoryObj = categories.find(
+    (c) => Number(c.id) === Number(categoryId)
+  );
 
   return (
     <section className="post-feed">
       <div className="feed-header">
-        <div>
+        <div className="feed-title-group">
           <h1 className="feed-title">
             {viewMode === 'saved'
               ? t.savedQuestionsTitle
-              : selectedCategoryObj
-              ? `${t.selectedCategoryPrefix} ${
-                  selectedCategoryObj.title || selectedCategoryObj.name
-                }`
+              : activeCategoryObj
+              ? `${t.selectedCategoryPrefix} ${activeCategoryObj.title}`
               : t.communityQuestions}
           </h1>
           <p className="feed-subtitle">
-            {viewMode === 'saved'
-              ? t.savedSubtitle
-              : selectedCategoryObj?.description || t.communitySubtitle}
+            {viewMode === 'saved' ? t.savedSubtitle : t.communitySubtitle}
           </p>
         </div>
-        <button
-          type="button"
-          className="ask-btn"
-          onClick={() => dispatch(openAskModal(null))}
-        >
-          {t.askQuestionBtn}
+
+        <button type="button" className="ask-btn" onClick={handleAskClick}>
+          + {t.askQuestionBtn}
         </button>
       </div>
-
-      {selectedCategoryObj && viewMode !== 'saved' && (
-        <div className="date-filter-bar category-banner">
-          <span>
-            <strong>
-              {selectedCategoryObj.title || selectedCategoryObj.name}:
-            </strong>{' '}
-            {selectedCategoryObj.description || t.communitySubtitle}
-          </span>
-          <button
-            type="button"
-            className="clear-dates-btn"
-            onClick={() => dispatch(setCategoryId(null))}
-          >
-            {t.resetCategoryBtn}
-          </button>
-        </div>
-      )}
 
       <div className="feed-controls-bar">
         <div className="feed-tabs">
           <button
             type="button"
-            className={`tab ${
-              sortBy === 'date' &&
-              viewMode !== 'unanswered' &&
-              viewMode !== 'saved'
-                ? 'active'
-                : ''
-            }`}
-            onClick={() => {
-              if (sortBy === 'date' && viewMode !== 'unanswered') {
-                dispatch(setOrder(order === 'DESC' ? 'ASC' : 'DESC'));
-              } else {
-                dispatch(setViewMode('all'));
-                dispatch(setSortBy('date'));
-                dispatch(setOrder('DESC'));
-              }
-            }}
+            className={`feed-tab ${viewMode === 'all' ? 'active' : ''}`}
+            onClick={() => dispatch(setViewMode('all'))}
           >
-            {t.tabAll}{' '}
-            {sortBy === 'date' && viewMode !== 'unanswered'
-              ? order === 'DESC'
-                ? '↓'
-                : '↑'
-              : ''}
+            {t.tabAll}
           </button>
           <button
             type="button"
-            className={`tab ${
-              sortBy === 'likes' && viewMode !== 'saved' ? 'active' : ''
-            }`}
-            onClick={() => {
-              if (sortBy === 'likes') {
-                dispatch(setOrder(order === 'DESC' ? 'ASC' : 'DESC'));
-              } else {
-                dispatch(setSortBy('likes'));
-                dispatch(setOrder('DESC'));
-              }
-            }}
-          >
-            {t.tabPopular}{' '}
-            {sortBy === 'likes' ? (order === 'DESC' ? '↓' : '↑') : ''}
-          </button>
-          <button
-            type="button"
-            className={`tab ${viewMode === 'unanswered' ? 'active' : ''}`}
+            className={`feed-tab ${viewMode === 'unanswered' ? 'active' : ''}`}
             onClick={() => dispatch(setViewMode('unanswered'))}
           >
             {t.tabUnanswered}
           </button>
           <button
             type="button"
-            className={`tab tab-saved-btn ${
-              viewMode === 'saved' ? 'active' : ''
-            }`}
+            className={`feed-tab ${viewMode === 'popular' ? 'active' : ''}`}
+            onClick={() => {
+              dispatch(setViewMode('popular'));
+              dispatch(setSortBy('likes'));
+            }}
+          >
+            {t.tabPopular}
+          </button>
+          <button
+            type="button"
+            className={`feed-tab ${viewMode === 'saved' ? 'active' : ''}`}
             onClick={() => dispatch(setViewMode('saved'))}
           >
             <span>{t.tabSaved}</span>
             <span
-              className={`saved-tab-badge ${
-                savedCount > 0 ? 'has-items' : ''
-              }`}
+              className={`saved-tab-badge ${savedCount > 0 ? 'has-items' : ''}`}
             >
               {savedCount}
             </span>
           </button>
         </div>
 
-        <div className="feed-filters">
-          <label className="filter-label">
-            {t.categoryFilterLabel}
+        <div className="feed-filters-row">
+          <div className="filter-group">
+            <label htmlFor="feed-category-select">{t.categoryFilterLabel}</label>
             <select
+              id="feed-category-select"
+              className="filter-select"
               value={categoryId || ''}
               onChange={(e) =>
                 dispatch(
                   setCategoryId(e.target.value ? Number(e.target.value) : null)
                 )
               }
-              className="filter-select"
             >
               <option value="">{t.allCategoriesOption}</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.title || cat.name}
+                  {cat.title}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="filter-label">
-            {t.sortByLabel}
+          <div className="filter-group">
+            <label htmlFor="feed-sort-select">{t.sortByLabel}</label>
             <select
+              id="feed-sort-select"
+              className="filter-select"
               value={sortBy}
               onChange={(e) => dispatch(setSortBy(e.target.value))}
-              className="filter-select"
             >
               <option value="date">{t.sortByDate}</option>
-              <option value="likes">
-                {t.sortByLikesOption || t.tabPopular}
-              </option>
+              <option value="likes">{t.sortByLikesOption}</option>
             </select>
-          </label>
+          </div>
 
-          <label className="filter-label">
-            {t.orderLabel}
+          <div className="filter-group">
+            <label htmlFor="feed-order-select">{t.orderLabel}</label>
             <select
-              value={order}
-              onChange={(e) => dispatch(setOrder(e.target.value))}
+              id="feed-order-select"
               className="filter-select"
+              value={String(order || 'DESC').toUpperCase()}
+              onChange={(e) => dispatch(setOrder(e.target.value))}
             >
-              <option value="DESC">
-                {sortBy === 'likes' ? t.orderDescLikes : t.orderDescDate}
-              </option>
-              <option value="ASC">
-                {sortBy === 'likes' ? t.orderAscLikes : t.orderAscDate}
-              </option>
+              <option value="DESC">{t.orderDesc}</option>
+              <option value="ASC">{t.orderAsc}</option>
             </select>
-          </label>
+          </div>
 
           {isAdmin && (
-            <label className="filter-label">
-              {t.statusLabel}
+            <div className="filter-group">
+              <label htmlFor="feed-status-select">{t.statusLabel}</label>
               <select
+                id="feed-status-select"
+                className="filter-select"
                 value={statusFilter}
                 onChange={(e) => dispatch(setStatusFilter(e.target.value))}
-                className="filter-select"
               >
+                <option value="all">{t.statusAll}</option>
                 <option value="active">{t.statusActive}</option>
                 <option value="inactive">{t.statusInactive}</option>
               </select>
-            </label>
+            </div>
           )}
 
-          <label className="filter-label">
-            {t.perPageLabel}
+          <div className="filter-group">
+            <label htmlFor="feed-limit-select">{t.perPageLabel}</label>
             <select
-              value={limit}
-              onChange={(e) => dispatch(setLimit(e.target.value))}
+              id="feed-limit-select"
               className="filter-select"
+              value={limit}
+              onChange={(e) => dispatch(setLimit(Number(e.target.value)))}
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
+              {PAGE_SIZE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
             </select>
-          </label>
+          </div>
+        </div>
+
+        <div className="feed-dates-row">
+          <span className="date-filter-label">{t.datePeriod}</span>
+          <input
+            type="date"
+            className="date-input"
+            value={startDate || ''}
+            max={endDate || undefined}
+            onChange={(e) => dispatch(setStartDate(e.target.value))}
+          />
+          <span>—</span>
+          <input
+            type="date"
+            className="date-input"
+            value={endDate || ''}
+            min={startDate || undefined}
+            onChange={(e) => dispatch(setEndDate(e.target.value))}
+          />
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              className="clear-dates-btn"
+              onClick={() => dispatch(clearDateFilter())}
+            >
+              {t.clearDates}
+            </button>
+          )}
         </div>
       </div>
 
-      {viewMode !== 'saved' && (
-        <div className="date-filter-bar">
-          <span className="date-filter-title">{t.datePeriod}</span>
-          <div className="date-inputs-group">
-            <label className="date-label">
-              {t.dateFrom}
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => dispatch(setStartDate(e.target.value))}
-                className="date-input"
-              />
-            </label>
-            <label className="date-label">
-              {t.dateTo}
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => dispatch(setEndDate(e.target.value))}
-                className="date-input"
-              />
-            </label>
-            {(startDate || endDate) && (
-              <button
-                type="button"
-                className="clear-dates-btn"
-                onClick={() => dispatch(clearDateFilter())}
-              >
-                {t.clearDates}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {postStatus === 'loading' && posts.length === 0 && viewMode !== 'saved' && (
-        <div className="feed-state-box">{t.loadingPosts}</div>
-      )}
-
-      {postStatus === 'failed' && viewMode !== 'saved' && (
-        <div className="feed-state-box error">
-          <p>
-            {t.errorLoadingPosts} {error}
-          </p>
+      {status === 'loading' && items.length === 0 ? (
+        <div className="feed-empty-state">{t.loadingPosts}</div>
+      ) : error && items.length === 0 ? (
+        <div className="feed-empty-state">
+          <p>{t.errorLoadingPosts}</p>
           <button
             type="button"
-            className="retry-btn"
+            className="ask-btn"
             onClick={() => dispatch(fetchPosts())}
           >
             {t.retryBtn}
           </button>
         </div>
-      )}
+      ) : paginatedPosts.length === 0 ? (
+        <div className="feed-empty-state">
+          {viewMode === 'saved' ? t.noSavedPosts : t.noPostsFound}
+        </div>
+      ) : (
+        <div className="posts-list">
+          {paginatedPosts.map((post) => {
+            const authorId = post.author_id;
+            const authorProfile = authorId ? usersMap[String(authorId)] : null;
+            const authorName =
+              (authorProfile && !authorProfile._notFound && authorProfile.login) ||
+              post.author_login ||
+              `${t.userPrefix} #${authorId || 1}`;
+            const authorAvatar = avatarUrl(authorProfile);
 
-      {(postStatus === 'succeeded' || viewMode === 'saved') &&
-        displayedPosts.length === 0 && (
-          <div className="feed-state-box">
-            {viewMode === 'saved' ? t.noSavedPosts : t.noPostsFound}
-          </div>
-        )}
+            const postCats =
+              previewCategoriesByPost[post.id] ||
+              (Array.isArray(post.categories) ? post.categories : []);
+            const commentsList = previewCommentsByPost[post.id] || [];
+            const bestComment =
+              commentsList.length > 0
+                ? [...commentsList].sort(
+                    (a, b) =>
+                      Number(commentLikesMap[b.id] ?? b.likes_count ?? 0) -
+                      Number(commentLikesMap[a.id] ?? a.likes_count ?? 0)
+                  )[0]
+                : null;
+            const bestCommentText = bestComment
+              ? parseCommentContent(bestComment.content).text
+              : '';
 
-      {(postStatus === 'succeeded' ||
-        viewMode === 'saved' ||
-        posts.length > 0) &&
-        displayedPosts.length > 0 && (
-          <div className="posts-list">
-            {displayedPosts.map((post) => {
-              const postAuthorId =
-                post.author_id || post.user_id || post.author?.id;
-              const mappedAuthor = usersMap[postAuthorId];
-              const authorName =
-                mappedAuthor?.login ||
-                post.author?.login ||
-                post.author_login ||
-                post.author_name ||
-                `${t.userPrefix} #${postAuthorId || 1}`;
+            const currentVote = userVotes[post.id] || null;
+            const score = Number(
+              postLikesMap[post.id] ?? post.likes_count ?? 0
+            );
+            const isSaved = savedIdsSet.has(Number(post.id));
 
-              const authorKey =
-                postAuthorId ||
-                post.author?.login ||
-                post.author_login ||
-                'unknown';
+            const postReactionData = postReactions[post.id] || {};
+            const reactionCounts = postReactionData.counts || {};
 
-              const publishDate = formatPublishDate(
-                post.publish_date ||
-                  post.publishDate ||
-                  post.created_at ||
-                  post.createdAt
-              );
-
-              const effectivePostScore = getPostEffectiveScore(post);
-              const authorRating =
-                authorRatingsMap[authorKey] ?? effectivePostScore;
-
-              const currentVote = userVotes[post.id] || null;
-              const postReactionState = postReactions[post.id] || {
-                counts: {},
-                userSelected: [],
-              };
-
-              const visibleComments = getVisiblePreviewComments(post.id);
-              const commentsCount =
-                visibleComments !== undefined
-                  ? visibleComments.length
-                  : post.comments_count ?? post.commentsCount ?? 0;
-
-              const postCategories =
-                previewCategoriesByPost[post.id] ||
-                (Array.isArray(post.categories) ? post.categories : []);
-
-              const bestCommentData = getMostLikedComment(post.id);
-              const bestCommentAuthorId =
-                bestCommentData?.comment?.author_id ||
-                bestCommentData?.comment?.user_id;
-
-              const isSaved = Boolean(savedPosts[post.id]);
-              const isShareOpen = activeSharePostId === post.id;
-              const isReactionPickerOpen =
-                activeReactionPickerPostId === post.id;
-
-              return (
-                <article key={post.id} className="post-item">
-                  <div className="post-top-row">
-                    <h2
-                      className="post-title"
-                      onClick={() => dispatch(openPostPage(post.id))}
-                    >
-                      {post.title}
-                    </h2>
-                    {post.status && (
-                      <span className={`post-status-badge ${post.status}`}>
-                        {post.status === 'active'
-                          ? t.badgeActive
-                          : t.badgeInactive}
-                      </span>
-                    )}
-                  </div>
-
-                  <p
-                    className="post-snippet"
-                    onClick={() => dispatch(openPostPage(post.id))}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {post.content}
-                  </p>
-
-                  {postCategories.length > 0 && (
-                    <div className="post-categories">
-                      {postCategories.map((cat, idx) => {
-                        const catObj =
-                          typeof cat === 'object' && cat !== null
-                            ? cat
-                            : categories.find(
-                                (c) =>
-                                  Number(c.id) === Number(cat) ||
-                                  c.title === cat
-                              ) || { id: idx, title: String(cat) };
-                        const isCatSelected =
-                          categoryId &&
-                          Number(catObj.id) === Number(categoryId);
-                        return (
-                          <span
-                            key={catObj.id || idx}
-                            className={`post-category-tag ${
-                              isCatSelected ? 'active' : ''
-                            }`}
-                            title={catObj.description || catObj.title}
-                            onClick={() => {
-                              if (catObj.id) {
-                                dispatch(
-                                  setCategoryId(
-                                    isCatSelected ? null : Number(catObj.id)
-                                  )
-                                );
-                              }
-                            }}
-                          >
-                            {catObj.title || catObj.name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {bestCommentData && (
-                    <div
-                      className="best-comment-preview"
-                      onClick={() => dispatch(openPostPage(post.id))}
-                    >
-                      <div className="best-comment-header">
-                        <span className="best-comment-badge">
-                          {t.bestAnswerBadge}
-                        </span>
-                        <span className="best-comment-author">
-                          {usersMap[bestCommentAuthorId]?.login ||
-                            bestCommentData.comment.author?.login ||
-                            bestCommentData.comment.author_login ||
-                            `${t.userPrefix} #${bestCommentAuthorId || 1}`}
-                        </span>
-                        <span className="best-comment-likes">
-                          ↑ {bestCommentData.score}
-                        </span>
-                      </div>
-                      <p className="best-comment-text">
-                        {bestCommentData.comment.content}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="post-meta">
-                    <button
-                      type="button"
-                      className="post-author-link"
-                      onClick={() => handleOpenAuthorProfile(post)}
-                    >
-                      {authorName}
-                    </button>
+            return (
+              <article
+                key={post.id}
+                className={`post-item ${
+                  post.status === 'inactive' ? 'post-inactive' : ''
+                }`}
+                onClick={() => dispatch(openPostPage(post.id))}
+              >
+                <div className="post-item-header">
+                  <div className="post-badges">
                     <span
-                      className={`author-rating-badge ${
-                        authorRating > 0
-                          ? 'positive'
-                          : authorRating < 0
-                          ? 'negative'
-                          : ''
+                      className={`status-pill ${
+                        post.status === 'inactive' ? 'inactive' : 'active'
                       }`}
                     >
-                      ★ {authorRating > 0 ? `+${authorRating}` : authorRating}
+                      {post.status === 'inactive'
+                        ? t.badgeInactive
+                        : t.badgeActive}
                     </span>
 
-                    <span className="dot">•</span>
-                    <span className="post-date-text">{publishDate}</span>
+                    {postCats.map((c, idx) => {
+                      const label =
+                        typeof c === 'object' ? c.title || c.name : c;
+                      return (
+                        <span key={c.id || idx} className="post-cat-tag">
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
 
-                    <div className="vote-pill" role="group">
+                  <span className="post-date">
+                    {formatDate(post.publish_date, language)}
+                  </span>
+                </div>
+
+                <h2 className="post-title">{post.title}</h2>
+
+                <RichContent text={post.content} compact language={language} />
+
+                {bestComment && bestCommentText && (
+                  <div className="post-best-comment-preview">
+                    <span className="best-comment-badge">
+                      💬 {t.bestAnswerBadge}:
+                    </span>
+                    <span className="best-comment-text">{bestCommentText}</span>
+                  </div>
+                )}
+
+                <div
+                  className="post-meta"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    className="post-author-chip"
+                    onClick={(e) => handleAuthorClick(e, post)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && handleAuthorClick(e, post)
+                    }
+                  >
+                    <div className="post-author-avatar">
+                      {authorAvatar ? (
+                        <img src={authorAvatar} alt={authorName} />
+                      ) : (
+                        <span>{getInitials(authorName)}</span>
+                      )}
+                    </div>
+                    <span className="post-author-name">{authorName}</span>
+                  </div>
+
+                  <div className="post-actions-bar">
+                    <div className="vote-pill">
                       <button
                         type="button"
-                        className={`vote-btn upvote ${
-                          currentVote === 'like' ? 'active' : ''
+                        className={`vote-btn ${
+                          currentVote === 'like' ? 'active-up' : ''
                         }`}
-                        onClick={() => handleVote(post, 'like')}
+                        onClick={(e) => handleVote(e, post.id, 'like')}
                       >
-                        ↑
+                        ▲
                       </button>
-                      <span
-                        className={`vote-score ${
-                          effectivePostScore > 0
-                            ? 'positive'
-                            : effectivePostScore < 0
-                            ? 'negative'
-                            : ''
-                        }`}
-                      >
-                        {effectivePostScore}
-                      </span>
+                      <span className="vote-score">{score}</span>
                       <button
                         type="button"
-                        className={`vote-btn downvote ${
-                          currentVote === 'dislike' ? 'active' : ''
+                        className={`vote-btn ${
+                          currentVote === 'dislike' ? 'active-down' : ''
                         }`}
-                        onClick={() => handleVote(post, 'dislike')}
+                        onClick={(e) => handleVote(e, post.id, 'dislike')}
                       >
-                        ↓
+                        ▼
                       </button>
                     </div>
+
+                    <button
+                      type="button"
+                      className="comments-count-pill"
+                      onClick={() => dispatch(openPostPage(post.id))}
+                    >
+                      💬 {commentsList.length || 0} {t.answersCountLabel}
+                    </button>
 
                     <div className="reactions-bar">
                       {REACTION_TYPES.map((r) => {
-                        const count = postReactionState.counts?.[r.id] || 0;
-                        const isSelected =
-                          postReactionState.userSelected?.includes(r.id);
-                        if (count === 0 && !isSelected) return null;
-
+                        const count = Number(reactionCounts?.[r.id] || 0);
+                        if (count <= 0) return null;
                         return (
                           <button
                             key={r.id}
                             type="button"
-                            className={`reaction-chip ${
-                              isSelected ? 'active' : ''
-                            }`}
-                            onClick={() => handleReactionSelect(post.id, r)}
+                            className="reaction-chip"
+                            onClick={() =>
+                              dispatch(
+                                toggleReaction({
+                                  postId: post.id,
+                                  reactionId: r.id,
+                                  userId: bucketKey,
+                                })
+                              )
+                            }
                           >
-                            <span>{r.emoji}</span>
-                            <span className="reaction-count">{count}</span>
+                            {r.emoji} {count}
                           </button>
                         );
                       })}
 
-                      <div
-                        className="reaction-picker-wrapper"
-                        ref={isReactionPickerOpen ? reactionMenuRef : null}
-                      >
+                      <div className="reaction-picker-wrap">
                         <button
                           type="button"
-                          className={`add-reaction-btn ${
-                            isReactionPickerOpen ? 'active' : ''
-                          }`}
+                          className="reaction-add-btn"
                           onClick={() =>
-                            setActiveReactionPickerPostId(
-                              isReactionPickerOpen ? null : post.id
+                            setOpenReactionPostId(
+                              openReactionPostId === post.id ? null : post.id
                             )
                           }
                         >
-                          + 😊
+                          😊 +
                         </button>
-
-                        {isReactionPickerOpen && (
+                        {openReactionPostId === post.id && (
                           <div className="reaction-popover">
-                            {REACTION_TYPES.map((r) => {
-                              const isSelected =
-                                postReactionState.userSelected?.includes(r.id);
-                              return (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  className={`reaction-picker-item ${
-                                    isSelected ? 'active' : ''
-                                  }`}
-                                  onClick={() =>
-                                    handleReactionSelect(post.id, r)
-                                  }
-                                >
-                                  <span className="reaction-emoji">
-                                    {r.emoji}
-                                  </span>
-                                  <span className="reaction-name">
-                                    {language === 'en' ? r.labelEn : r.label}
-                                  </span>
-                                  <span className="reaction-weight">
-                                    +{r.weight}
-                                  </span>
-                                </button>
-                              );
-                            })}
+                            {REACTION_TYPES.map((r) => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                className="reaction-option"
+                                onClick={() => {
+                                  dispatch(
+                                    toggleReaction({
+                                      postId: post.id,
+                                      reactionId: r.id,
+                                      userId: bucketKey,
+                                    })
+                                  );
+                                  setOpenReactionPostId(null);
+                                }}
+                              >
+                                {r.emoji}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1136,119 +769,126 @@ const PostFeed = () => {
 
                     <button
                       type="button"
-                      className="bookmark-btn"
-                      onClick={() => dispatch(openPostPage(post.id))}
-                    >
-                      💬 {commentsCount} {t.answersCountLabel}
-                    </button>
-
-                    <button
-                      type="button"
                       className={`bookmark-btn ${
                         isSaved ? 'active saved-glow' : ''
                       }`}
-                      onClick={() => handleToggleBookmark(post)}
+                      onClick={() =>
+                        dispatch(toggleSavePost({ post, userId: bucketKey }))
+                      }
                     >
-                      <span>🔖</span>
+                      <span>{isSaved ? '★' : '☆'}</span>
                       <span>{isSaved ? t.savedBtn : t.saveBtn}</span>
                     </button>
 
-                    <div
-                      className="share-wrapper"
-                      ref={isShareOpen ? shareMenuRef : null}
-                    >
+                    <div className="share-dropdown-wrap">
                       <button
                         type="button"
-                        className={`share-btn ${isShareOpen ? 'active' : ''}`}
+                        className="share-btn"
                         onClick={() =>
-                          setActiveSharePostId(isShareOpen ? null : post.id)
+                          setOpenSharePostId(
+                            openSharePostId === post.id ? null : post.id
+                          )
                         }
                       >
-                        <span className="share-icon">↗</span>
-                        <span>{t.shareBtn}</span>
+                        ↗ {t.shareBtn}
                       </button>
-
-                      {isShareOpen && (
-                        <div className="share-dropdown">
+                      {openSharePostId === post.id && (
+                        <div className="share-popover">
                           <button
                             type="button"
-                            className="share-option"
-                            onClick={() => handleSocialShare('facebook', post)}
+                            onClick={(e) => handleShare(e, post, 'copy')}
                           >
-                            <span>Facebook</span>
+                            🔗 {t.copyLinkBtn}
                           </button>
                           <button
                             type="button"
-                            className="share-option"
-                            onClick={() => handleSocialShare('instagram', post)}
+                            onClick={(e) => handleShare(e, post, 'telegram')}
                           >
-                            <span>{t.instagramCopy}</span>
+                            ✈️ Telegram
                           </button>
                           <button
                             type="button"
-                            className="share-option"
-                            onClick={() => handleSocialShare('telegram', post)}
+                            onClick={(e) => handleShare(e, post, 'facebook')}
                           >
-                            <span>Telegram</span>
+                            📘 Facebook
                           </button>
                           <button
                             type="button"
-                            className="share-option"
-                            onClick={() => handleSocialShare('twitter', post)}
+                            onClick={(e) => handleShare(e, post, 'instagram')}
                           >
-                            <span>X (Twitter)</span>
-                          </button>
-                          <div className="share-divider" />
-                          <button
-                            type="button"
-                            className="share-option copy-link"
-                            onClick={() =>
-                              copyToClipboard(getPostShareUrl(post.id))
-                            }
-                          >
-                            <span>{t.copyLinkBtn}</span>
+                            📸 {t.instagramCopy}
                           </button>
                         </div>
                       )}
                     </div>
                   </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
-      {viewMode !== 'saved' && (
-        <div className="pagination-wrapper">
+      {displayedPosts.length > 0 && (
+        <div className="pagination-footer">
+          <div className="pagination-mode-toggle">
+            <span>{t.navModeLabel}</span>
+            <button
+              type="button"
+              className={`mode-btn ${
+                paginationMode === 'pages' ? 'active' : ''
+              }`}
+              onClick={() => dispatch(setPaginationMode('pages'))}
+            >
+              {t.modePages}
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${
+                paginationMode === 'infinite' ? 'active' : ''
+              }`}
+              onClick={() => dispatch(setPaginationMode('infinite'))}
+            >
+              {t.modeInfinite}
+            </button>
+          </div>
+
           {paginationMode === 'pages' ? (
-            <div className="pagination-bar">
+            <div className="pagination-controls">
               <button
                 type="button"
                 className="page-btn"
-                disabled={page <= 1 || postStatus === 'loading'}
-                onClick={() => dispatch(setPage(page - 1))}
+                disabled={safePage <= 1}
+                onClick={() => dispatch(setPage(safePage - 1))}
               >
                 {t.prevPage}
               </button>
 
+              <span className="page-indicator">
+                {t.pageWord} <strong>{safePage}</strong> {t.ofWord}{' '}
+                <strong>{totalPages}</strong> ({displayedPosts.length})
+              </span>
+
               <form
                 className="page-jump-form"
-                onSubmit={handleGoToSpecificPage}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const num = Math.max(
+                    1,
+                    Math.min(totalPages, Number(pageInput) || 1)
+                  );
+                  dispatch(setPage(num));
+                }}
               >
-                <span className="page-indicator">{t.pageWord}</span>
                 <input
                   type="number"
                   min={1}
-                  max={computedTotalPages}
-                  value={customPageInput}
-                  onChange={(e) => setCustomPageInput(e.target.value)}
-                  className="page-number-input"
-                  aria-label="Page number"
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  className="page-jump-input"
                 />
-                <span className="page-indicator">
-                  {t.ofWord} {computedTotalPages}
-                </span>
-                <button type="submit" className="page-go-btn">
+                <button type="submit" className="page-btn">
                   {t.goBtn}
                 </button>
               </form>
@@ -1256,41 +896,24 @@ const PostFeed = () => {
               <button
                 type="button"
                 className="page-btn"
-                disabled={postStatus === 'loading' || page >= computedTotalPages}
-                onClick={() => dispatch(setPage(page + 1))}
+                disabled={safePage >= totalPages}
+                onClick={() => dispatch(setPage(safePage + 1))}
               >
                 {t.nextPage}
               </button>
             </div>
           ) : (
-            <div className="pagination-bar">
+            paginatedPosts.length < displayedPosts.length && (
               <button
                 type="button"
-                className="ask-btn"
-                disabled={postStatus === 'loading'}
-                onClick={handleLoadMoreClick}
+                className="load-more-btn"
+                onClick={() => dispatch(setPage(safePage + 1))}
               >
-                {postStatus === 'loading' ? t.loadingMore : t.loadMoreBtn}
+                {t.loadMoreBtn} ({paginatedPosts.length} /{' '}
+                {displayedPosts.length})
               </button>
-            </div>
+            )
           )}
-
-          <div className="pagination-mode-switch">
-            <button
-              type="button"
-              className="mode-toggle-link"
-              onClick={() =>
-                dispatch(
-                  setPaginationMode(
-                    paginationMode === 'pages' ? 'infinite' : 'pages'
-                  )
-                )
-              }
-            >
-              {t.navModeLabel}{' '}
-              {paginationMode === 'pages' ? t.modePages : t.modeInfinite}
-            </button>
-          </div>
         </div>
       )}
     </section>

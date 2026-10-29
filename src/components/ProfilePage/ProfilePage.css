@@ -41,7 +41,6 @@
   cursor: pointer;
 }
 
-/* Универсальная карточка секции */
 .profile-section-card {
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
@@ -50,7 +49,6 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-/* Основная карточка пользователя */
 .profile-main-card {
   display: grid;
   grid-template-columns: 140px 1fr;
@@ -200,7 +198,7 @@
 
 .profile-input.compact,
 .profile-select.compact {
-  height: 34px;
+  height: 36px;
   font-size: 13px;
   padding: 0 10px;
 }
@@ -234,7 +232,6 @@
   color: #047857;
 }
 
-/* Заголовки секций */
 .section-card-header {
   display: flex;
   align-items: flex-start;
@@ -265,11 +262,10 @@
   font-weight: 700;
 }
 
-/* Формы в админ-панели */
 .admin-bar-form {
   display: grid;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   align-items: center;
 }
 
@@ -278,10 +274,78 @@
 }
 
 .users-grid-form {
-  grid-template-columns: 1fr 1.2fr 1fr 110px auto;
+  grid-template-columns: 1fr 1.2fr 1fr 1fr 100px auto;
 }
 
-/* Сетка карточек категорий */
+.profile-readonly-info {
+  font-size: 14px;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Панель быстрого поиска и фильтра пользователей по роли */
+.admin-users-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.admin-users-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+}
+
+.admin-users-search-wrap .profile-input {
+  width: 100%;
+  padding-right: 30px;
+}
+
+.admin-search-clear-btn {
+  position: absolute;
+  right: 8px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.admin-role-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-filter-pill {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.role-filter-pill.active {
+  background-color: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
 .admin-categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -363,7 +427,6 @@
   gap: 8px;
 }
 
-/* Список пользователей в админке */
 .admin-users-list {
   display: flex;
   flex-direction: column;
@@ -471,7 +534,6 @@
   cursor: not-allowed;
 }
 
-/* Панель фильтрации и сортировки постов в профиле */
 .profile-posts-toolbar {
   display: flex;
   align-items: center;

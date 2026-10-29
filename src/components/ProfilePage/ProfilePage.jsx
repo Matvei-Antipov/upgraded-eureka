@@ -3,73 +3,95 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   closeProfilePage,
   openProfilePage,
+  openUserProfile,
   updateUserProfile,
   uploadUserAvatar,
   fetchAllUsers,
   adminCreateUser,
-  adminUpdateUserRole,
   adminDeleteUser,
 } from '../../store/authSlice';
 import {
   openPostPage,
   openAskModal,
+  fetchPostPreviewComments,
   createCategory,
   updateCategory,
   deleteCategory,
   deleteExistingPost,
   updateExistingPost,
+  showNotification,
 } from '../../store/postsSlice';
-import { translations } from '../../i18n/translations';
+import { translations, translateMessage } from '../../i18n/translations';
+import {
+  PROFILE_POSTS_STEP,
+  MAX_AVATAR_SIZE_MB,
+  ALLOWED_IMAGE_TYPES,
+} from '../../config';
+import { avatarUrl, getInitials, formatDate } from '../../utils/format';
 import './ProfilePage.css';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
   const {
     user,
     viewedProfileUser,
-    viewedUserProfile,
     allUsers = [],
-    usersList = [],
     language: authLang,
   } = useSelector((state) => state.auth);
-  const { items: posts = [], categories = [] } = useSelector((state) => state.posts);
+  const {
+    items: posts = [],
+    categories = [],
+    previewCategoriesByPost = {},
+    postLikesMap = {},
+  } = useSelector((state) => state.posts);
 
   const language = authLang || 'uk';
   const t = translations[language] || translations.uk;
 
-  const targetUser = viewedUserProfile || viewedProfileUser || user;
-  const isOwnProfile = !targetUser || !user || Number(targetUser?.id) === Number(user?.id);
+  const targetUser = viewedProfileUser || user;
+  const isOwnProfile =
+    !viewedProfileUser ||
+    (user && Number(targetUser?.id) === Number(user?.id));
   const isAdmin = user?.role === 'admin';
-  const usersToDisplay = allUsers.length > 0 ? allUsers : usersList;
+  const canEditProfile = Boolean(user && (isOwnProfile || isAdmin));
 
-  const [login, setLogin] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [saveMessage, setSaveMessage] = useState('');
+  const [profileFormError, setProfileFormError] = useState('');
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
-  // Админ-панель: категории
+  // Admin panel: categories
   const [catTitle, setCatTitle] = useState('');
   const [catDesc, setCatDesc] = useState('');
   const [editingCatId, setEditingCatId] = useState(null);
   const [editCatTitle, setEditCatTitle] = useState('');
   const [editCatDesc, setEditCatDesc] = useState('');
 
-  // Админ-панель: пользователи
+  // Admin panel: users
   const [newUserLogin, setNewUserLogin] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
+  const [newUserPassConfirm, setNewUserPassConfirm] = useState('');
   const [newUserRole, setNewUserRole] = useState('user');
-  const [adminFeedback, setAdminFeedback] = useState('');
+  const [adminUserError, setAdminUserError] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
 
-  // Фильтрация и сортировка постов в профиле
+  // Filtering, sorting and pagination of user's own posts
   const [profileCategoryFilter, setProfileCategoryFilter] = useState('all');
   const [profileSortBy, setProfileSortBy] = useState('date');
   const [profileSortOrder, setProfileSortOrder] = useState('desc');
+  const [visiblePostsCount, setVisiblePostsCount] =
+    useState(PROFILE_POSTS_STEP);
 
   useEffect(() => {
+    setAvatarFailed(false);
+    setProfileFormError('');
+    setVisiblePostsCount(PROFILE_POSTS_STEP);
     if (targetUser) {
-      setLogin(targetUser.login || '');
-      setFullName(targetUser.full_name || targetUser.fullName || targetUser.login || '');
+      setFullName(targetUser.full_name || targetUser.login || '');
       setEmail(targetUser.email || '');
     }
   }, [targetUser]);
@@ -80,74 +102,147 @@ const ProfilePage = () => {
     }
   }, [isAdmin, isOwnProfile, dispatch]);
 
-  const userPosts = useMemo(() => {
+  const rawUserPosts = useMemo(() => {
     if (!targetUser) return [];
-    const targetLogin = String(targetUser.login || '').toLowerCase();
     const targetId = Number(targetUser.id);
-
-    let list = posts.filter((p) => {
-      const pAuthorId = Number(p.author_id || p.user_id || p.author?.id);
-      const pAuthorLogin = String(p.author || p.author_login || p.user?.login || '').toLowerCase();
-      return (targetId && pAuthorId === targetId) || (targetLogin && pAuthorLogin === targetLogin);
+    return posts.filter((p) => {
+      if (Number(p.author_id) !== targetId) return false;
+      if (p.status === 'inactive' && !isAdmin && !isOwnProfile) return false;
+      return true;
     });
+  }, [posts, targetUser, isAdmin, isOwnProfile]);
+
+  useEffect(() => {
+    rawUserPosts.forEach((p) => {
+      if (p?.id) {
+        dispatch(fetchPostPreviewComments(p.id));
+      }
+    });
+  }, [rawUserPosts, dispatch]);
+
+  const filteredAdminUsers = useMemo(() => {
+    const q = userSearchQuery.trim().toLowerCase();
+    return allUsers.filter((u) => {
+      const roleMatch =
+        userRoleFilter === 'all'
+          ? true
+          : String(u.role || 'user') === userRoleFilter;
+      const textMatch =
+        !q ||
+        String(u.login || '').toLowerCase().includes(q) ||
+        String(u.email || '').toLowerCase().includes(q) ||
+        String(u.full_name || '').toLowerCase().includes(q);
+      return roleMatch && textMatch;
+    });
+  }, [allUsers, userSearchQuery, userRoleFilter]);
+
+  const adminCount = useMemo(
+    () => allUsers.filter((u) => u.role === 'admin').length,
+    [allUsers]
+  );
+
+  const regularUserCount = useMemo(
+    () => allUsers.filter((u) => (u.role || 'user') !== 'admin').length,
+    [allUsers]
+  );
+
+  const userPosts = useMemo(() => {
+    let list = [...rawUserPosts];
 
     if (profileCategoryFilter !== 'all') {
       list = list.filter((p) => {
-        const postCats = Array.isArray(p.categories) ? p.categories : [];
-        return postCats.some((c) => {
-          const cTitle = typeof c === 'object' ? c.title || c.name : String(c);
-          return String(cTitle).toLowerCase() === String(profileCategoryFilter).toLowerCase();
-        });
+        const postCats =
+          previewCategoriesByPost[p.id] ||
+          (Array.isArray(p.categories) ? p.categories : []);
+        return postCats.some(
+          (c) =>
+            Number(typeof c === 'object' ? c.id : c) ===
+            Number(profileCategoryFilter)
+        );
       });
     }
 
     list.sort((a, b) => {
       if (profileSortBy === 'likes') {
-        const scoreA = Number(a.votes ?? a.likes_count ?? a.rating ?? 0);
-        const scoreB = Number(b.votes ?? b.likes_count ?? b.rating ?? 0);
-        return profileSortOrder === 'asc' ? scoreA - scoreB : scoreB - scoreA;
+        const scoreA = Number(postLikesMap[a.id] ?? a.likes_count ?? 0);
+        const scoreB = Number(postLikesMap[b.id] ?? b.likes_count ?? 0);
+        if (scoreA !== scoreB) {
+          return profileSortOrder === 'asc'
+            ? scoreA - scoreB
+            : scoreB - scoreA;
+        }
       }
-      const dateA = new Date(a.publish_date || a.created_at || 0).getTime();
-      const dateB = new Date(b.publish_date || b.created_at || 0).getTime();
+      const dateA = new Date(a.publish_date || 0).getTime();
+      const dateB = new Date(b.publish_date || 0).getTime();
       return profileSortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
     return list;
-  }, [posts, targetUser, profileCategoryFilter, profileSortBy, profileSortOrder]);
+  }, [
+    rawUserPosts,
+    previewCategoriesByPost,
+    postLikesMap,
+    profileCategoryFilter,
+    profileSortBy,
+    profileSortOrder,
+  ]);
 
   if (!targetUser) return null;
 
-  const getInitials = (nameStr) => {
-    const clean = String(nameStr || 'U').trim();
-    return clean.slice(0, 2).toUpperCase();
-  };
-
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (!login.trim()) return;
-    dispatch(
-      updateUserProfile({
-        userId: targetUser.id,
-        login: login.trim(),
-        full_name: fullName.trim(),
-        email: email.trim(),
-      })
-    );
-    setSaveMessage(language === 'en' ? 'Profile saved!' : 'Профіль успішно збережено!');
-    setTimeout(() => setSaveMessage(''), 2500);
+    setProfileFormError('');
+
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      setProfileFormError(t.fillAllFieldsError);
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      setProfileFormError(t.invalidEmailError);
+      return;
+    }
+
+    try {
+      await dispatch(
+        updateUserProfile({
+          userId: targetUser.id,
+          full_name: fullName.trim(),
+          email: email.trim(),
+        })
+      ).unwrap();
+    } catch (err) {
+      setProfileFormError(
+        err?.detail || translateMessage(language, err?.key, t.actionFailedError)
+      );
+    }
   };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      dispatch(uploadUserAvatar(file));
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      dispatch(
+        showNotification({ key: 'avatarInvalidTypeError', type: 'error' })
+      );
+      e.target.value = '';
+      return;
     }
+    if (file.size > MAX_AVATAR_SIZE_MB * 1024 * 1024) {
+      dispatch(showNotification({ key: 'avatarTooBigError', type: 'error' }));
+      e.target.value = '';
+      return;
+    }
+    setAvatarFailed(false);
+    dispatch(uploadUserAvatar(file));
+    e.target.value = '';
   };
 
   const handleAdminAddCategory = (e) => {
     e.preventDefault();
-    if (!catTitle.trim()) return;
-    dispatch(createCategory({ title: catTitle.trim(), description: catDesc.trim() }));
+    if (catTitle.trim().length < 2) return;
+    dispatch(
+      createCategory({ title: catTitle.trim(), description: catDesc.trim() })
+    );
     setCatTitle('');
     setCatDesc('');
   };
@@ -159,10 +254,9 @@ const ProfilePage = () => {
   };
 
   const handleSaveCategoryEdit = (catId) => {
-    if (!editCatTitle.trim()) return;
+    if (editCatTitle.trim().length < 2) return;
     dispatch(
       updateCategory({
-        id: catId,
         categoryId: catId,
         title: editCatTitle.trim(),
         description: editCatDesc.trim(),
@@ -171,42 +265,77 @@ const ProfilePage = () => {
     setEditingCatId(null);
   };
 
+  const handleDeleteCategory = (catId) => {
+    if (!window.confirm(t.confirmDeleteCategory)) return;
+    dispatch(deleteCategory(catId));
+  };
+
   const handleAdminCreateUser = async (e) => {
     e.preventDefault();
-    if (!newUserLogin.trim() || !newUserEmail.trim() || !newUserPass.trim()) return;
-    const res = await dispatch(
-      adminCreateUser({
-        login: newUserLogin.trim(),
-        email: newUserEmail.trim(),
-        password: newUserPass,
-        role: newUserRole,
-      })
-    );
-    if (!res.error) {
+    setAdminUserError('');
+
+    if (newUserLogin.trim().length < 3) {
+      setAdminUserError(t.loginTooShortError);
+      return;
+    }
+    if (!EMAIL_RE.test(newUserEmail.trim())) {
+      setAdminUserError(t.invalidEmailError);
+      return;
+    }
+    if (newUserPass.length < 6) {
+      setAdminUserError(t.passwordTooShortError);
+      return;
+    }
+    if (newUserPass !== newUserPassConfirm) {
+      setAdminUserError(t.passwordsDoNotMatchError);
+      return;
+    }
+
+    try {
+      await dispatch(
+        adminCreateUser({
+          login: newUserLogin.trim(),
+          email: newUserEmail.trim(),
+          password: newUserPass,
+          passwordConfirmation: newUserPassConfirm,
+          role: newUserRole,
+        })
+      ).unwrap();
       setNewUserLogin('');
       setNewUserEmail('');
       setNewUserPass('');
+      setNewUserPassConfirm('');
       setNewUserRole('user');
-      setAdminFeedback(language === 'en' ? 'User created!' : 'Користувача створено!');
-      setTimeout(() => setAdminFeedback(''), 2500);
+    } catch (err) {
+      setAdminUserError(
+        err?.detail ||
+          translateMessage(language, err?.key, t.registerFailedError)
+      );
     }
+  };
+
+  const handleDeleteUser = (userId) => {
+    if (!window.confirm(t.confirmDeleteUser)) return;
+    dispatch(adminDeleteUser(userId));
   };
 
   const handleTogglePostStatus = (post) => {
     const nextStatus = post.status === 'inactive' ? 'active' : 'inactive';
     dispatch(
       updateExistingPost({
-        id: post.id,
         postId: post.id,
-        title: post.title,
-        content: post.content,
         status: nextStatus,
-        categories: post.categories,
       })
     );
   };
 
-  const avatarSrc = targetUser.profile_picture || targetUser.avatar;
+  const handleDeletePost = (postId) => {
+    if (!window.confirm(t.confirmDeletePost)) return;
+    dispatch(deleteExistingPost(postId));
+  };
+
+  const resolvedAvatar = !avatarFailed ? avatarUrl(targetUser) : null;
+  const visibleUserPosts = userPosts.slice(0, visiblePostsCount);
 
   return (
     <div className="profile-page-container">
@@ -216,7 +345,7 @@ const ProfilePage = () => {
           className="profile-back-btn"
           onClick={() => dispatch(closeProfilePage())}
         >
-          ← {t.backToFeedBtn || 'Повернутися до стрічки питань'}
+          {t.backToFeedBtn}
         </button>
 
         {!isOwnProfile && user && (
@@ -225,25 +354,34 @@ const ProfilePage = () => {
             className="profile-own-btn"
             onClick={() => dispatch(openProfilePage(null))}
           >
-            {t.myOwnProfileBtn || 'Мій власний профіль'}
+            {t.myOwnProfileBtn}
           </button>
         )}
       </div>
 
-      {/* Карточка профиля */}
       <section className="profile-section-card profile-main-card">
         <div className="profile-avatar-column">
           <div className="profile-avatar-circle">
-            {avatarSrc ? (
-              <img src={avatarSrc} alt={targetUser.login} className="profile-avatar-img" />
+            {resolvedAvatar ? (
+              <img
+                src={resolvedAvatar}
+                alt={targetUser.login}
+                className="profile-avatar-img"
+                onError={() => setAvatarFailed(true)}
+              />
             ) : (
               <span>{getInitials(targetUser.login)}</span>
             )}
           </div>
-          {isOwnProfile && (
+          {isOwnProfile && user && (
             <label className="profile-upload-btn">
-              {t.changeAvatarBtn || 'Змінити фото'}
-              <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
+              {t.changeAvatarBtn}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                hidden
+              />
             </label>
           )}
         </div>
@@ -252,36 +390,46 @@ const ProfilePage = () => {
           <div className="profile-identity-header">
             <h2 className="profile-username">{targetUser.login}</h2>
             <span
-              className={`profile-role-badge ${targetUser.role === 'admin' ? 'admin' : 'user'}`}
+              className={`profile-role-badge ${
+                targetUser.role === 'admin' ? 'admin' : 'user'
+              }`}
             >
-              {targetUser.role === 'admin'
-                ? t.roleAdmin || 'Адміністратор'
-                : t.roleUser || 'Користувач'}
+              {targetUser.role === 'admin' ? t.roleAdmin : t.roleUser}
             </span>
             <span className="profile-rating-pill">
-              ★ {t.userRatingLabel || 'Рейтинг'}: {targetUser.rating ?? 0}
+              ★ {t.userRatingLabel} {targetUser.rating ?? 0}
             </span>
           </div>
 
-          {isOwnProfile ? (
+          {canEditProfile ? (
             <form className="profile-edit-form" onSubmit={handleSaveProfile}>
+              {!isOwnProfile && isAdmin && (
+                <p className="section-card-subtitle">
+                  🛡 {t.adminEditUserTitle}
+                </p>
+              )}
+              {profileFormError && (
+                <div className="modal-error-banner">{profileFormError}</div>
+              )}
               <div className="profile-form-grid">
                 <div className="profile-field">
-                  <label>{t.loginLabel || 'Логін'}</label>
+                  <label>{t.loginLabel}</label>
                   <input
                     type="text"
                     className="profile-input"
-                    value={login}
-                    onChange={(e) => setLogin(e.target.value)}
+                    value={targetUser.login || ''}
+                    disabled
+                    title={t.loginReadonlyHint}
                   />
                 </div>
                 <div className="profile-field">
-                  <label>{t.fullNameLabel || "Повне ім'я"}</label>
+                  <label>{t.fullNameLabel}</label>
                   <input
                     type="text"
                     className="profile-input"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    required
                   />
                 </div>
                 <div className="profile-field full-width">
@@ -291,67 +439,72 @@ const ProfilePage = () => {
                     className="profile-input"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    required
                   />
                 </div>
               </div>
 
               <div className="profile-form-actions">
                 <button type="submit" className="profile-primary-btn">
-                  {t.saveProfileBtn || 'Зберегти профіль'}
+                  {t.saveProfileBtn}
                 </button>
-                {saveMessage && <span className="profile-save-toast">{saveMessage}</span>}
+                {!isOwnProfile && isAdmin && (
+                  <button
+                    type="button"
+                    className="admin-delete-user-btn"
+                    onClick={() => handleDeleteUser(targetUser.id)}
+                  >
+                    {t.deleteBtn}
+                  </button>
+                )}
               </div>
             </form>
           ) : (
             <div className="profile-readonly-info">
               <p>
-                <strong>{t.fullNameLabel || "Повне ім'я"}:</strong>{' '}
+                <strong>{t.fullNameLabel}:</strong>{' '}
                 {targetUser.full_name || targetUser.login}
               </p>
-              {targetUser.email && (
-                <p>
-                  <strong>Email:</strong> {targetUser.email}
-                </p>
-              )}
             </div>
           )}
         </div>
       </section>
 
-      {/* Админ-панель: Категории */}
       {isAdmin && isOwnProfile && (
         <section className="profile-section-card">
           <div className="section-card-header">
             <div>
               <h3 className="section-card-title">
-                🛡️ {t.adminCategoriesTitle || 'Панель адміністратора: Управління категоріями'}
+                🛡️ {t.adminCategoriesTitle}
               </h3>
               <p className="section-card-subtitle">
-                {language === 'en'
-                  ? 'Create, edit or remove discussion categories'
-                  : 'Створення, редагування та видалення тематичних категорій'}
+                {t.adminCategoriesSubtitle}
               </p>
             </div>
             <span className="section-count-badge">{categories.length}</span>
           </div>
 
-          <form className="admin-bar-form categories-grid-form" onSubmit={handleAdminAddCategory}>
+          <form
+            className="admin-bar-form categories-grid-form"
+            onSubmit={handleAdminAddCategory}
+          >
             <input
               type="text"
               className="profile-input"
               value={catTitle}
               onChange={(e) => setCatTitle(e.target.value)}
-              placeholder={t.newTopicTitlePlaceholder || 'Назва нової теми...'}
+              placeholder={t.newTopicTitlePlaceholder}
+              required
             />
             <input
               type="text"
               className="profile-input"
               value={catDesc}
               onChange={(e) => setCatDesc(e.target.value)}
-              placeholder={t.newTopicDescPlaceholder || 'Опис теми...'}
+              placeholder={t.newTopicDescPlaceholder}
             />
             <button type="submit" className="profile-primary-btn">
-              + {language === 'en' ? 'Add' : 'Додати'}
+              {t.addCategoryBtn}
             </button>
           </form>
 
@@ -365,14 +518,14 @@ const ProfilePage = () => {
                       className="profile-input compact"
                       value={editCatTitle}
                       onChange={(e) => setEditCatTitle(e.target.value)}
-                      placeholder="Назва категорії"
+                      placeholder={t.newTopicTitlePlaceholder}
                     />
                     <input
                       type="text"
                       className="profile-input compact"
                       value={editCatDesc}
                       onChange={(e) => setEditCatDesc(e.target.value)}
-                      placeholder="Опис категорії"
+                      placeholder={t.newTopicDescPlaceholder}
                     />
                     <div className="admin-category-edit-actions">
                       <button
@@ -380,14 +533,14 @@ const ProfilePage = () => {
                         className="admin-action-btn save"
                         onClick={() => handleSaveCategoryEdit(cat.id)}
                       >
-                        ✓ Зберегти
+                        ✓ {t.saveBtn}
                       </button>
                       <button
                         type="button"
                         className="admin-action-btn"
                         onClick={() => setEditingCatId(null)}
                       >
-                        Скасувати
+                        {t.cancelBtn}
                       </button>
                     </div>
                   </div>
@@ -396,14 +549,14 @@ const ProfilePage = () => {
                     <div className="admin-category-info">
                       <span className="admin-category-name">{cat.title}</span>
                       <span className="admin-category-desc">
-                        {cat.description || 'Без опису'}
+                        {cat.description || t.noDescriptionLabel}
                       </span>
                     </div>
                     <div className="admin-category-actions">
                       <button
                         type="button"
                         className="admin-icon-btn"
-                        title="Редагувати категорію"
+                        title={t.editBtn}
                         onClick={() => startEditingCategory(cat)}
                       >
                         ✎
@@ -411,8 +564,8 @@ const ProfilePage = () => {
                       <button
                         type="button"
                         className="admin-icon-btn danger"
-                        title="Видалити категорію"
-                        onClick={() => dispatch(deleteCategory(cat.id))}
+                        title={t.deleteBtn}
+                        onClick={() => handleDeleteCategory(cat.id)}
                       >
                         ✕
                       </button>
@@ -425,44 +578,57 @@ const ProfilePage = () => {
         </section>
       )}
 
-      {/* Админ-панель: Пользователи */}
       {isAdmin && isOwnProfile && (
         <section className="profile-section-card">
           <div className="section-card-header">
             <div>
-              <h3 className="section-card-title">
-                👥 {language === 'en' ? 'User Management' : 'Управління користувачами'}
-              </h3>
-              <p className="section-card-subtitle">
-                {language === 'en'
-                  ? 'Create accounts, assign roles or remove users'
-                  : 'Створення облікових записів, зміна ролей та видалення користувачів'}
-              </p>
+              <h3 className="section-card-title">👥 {t.adminUsersTitle}</h3>
+              <p className="section-card-subtitle">{t.adminUsersSubtitle}</p>
             </div>
-            <span className="section-count-badge">{usersToDisplay.length}</span>
+            <span className="section-count-badge">
+              {filteredAdminUsers.length}
+            </span>
           </div>
 
-          <form className="admin-bar-form users-grid-form" onSubmit={handleAdminCreateUser}>
+          {adminUserError && (
+            <div className="modal-error-banner">{adminUserError}</div>
+          )}
+
+          <form
+            className="admin-bar-form users-grid-form"
+            onSubmit={handleAdminCreateUser}
+          >
             <input
               type="text"
               className="profile-input"
               value={newUserLogin}
               onChange={(e) => setNewUserLogin(e.target.value)}
-              placeholder="Login..."
+              placeholder={t.loginLabel}
+              required
             />
             <input
               type="email"
               className="profile-input"
               value={newUserEmail}
               onChange={(e) => setNewUserEmail(e.target.value)}
-              placeholder="Email..."
+              placeholder="Email"
+              required
             />
             <input
               type="password"
               className="profile-input"
               value={newUserPass}
               onChange={(e) => setNewUserPass(e.target.value)}
-              placeholder="Password..."
+              placeholder={t.passwordLabel}
+              required
+            />
+            <input
+              type="password"
+              className="profile-input"
+              value={newUserPassConfirm}
+              onChange={(e) => setNewUserPassConfirm(e.target.value)}
+              placeholder={t.confirmPasswordLabel}
+              required
             />
             <select
               className="profile-select"
@@ -473,62 +639,133 @@ const ProfilePage = () => {
               <option value="admin">admin</option>
             </select>
             <button type="submit" className="profile-primary-btn">
-              + {language === 'en' ? 'Create' : 'Створити'}
+              {t.createUserBtn}
             </button>
           </form>
 
-          {adminFeedback && <div className="profile-save-toast">{adminFeedback}</div>}
+          <div className="admin-users-filter-bar">
+            <div className="admin-users-search-wrap">
+              <input
+                type="text"
+                className="profile-input compact"
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                placeholder={t.searchUsersPlaceholder}
+              />
+              {userSearchQuery && (
+                <button
+                  type="button"
+                  className="admin-search-clear-btn"
+                  onClick={() => setUserSearchQuery('')}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="admin-role-filter-pills">
+              <button
+                type="button"
+                className={`role-filter-pill ${
+                  userRoleFilter === 'all' ? 'active' : ''
+                }`}
+                onClick={() => setUserRoleFilter('all')}
+              >
+                {t.filterAllUsers} ({allUsers.length})
+              </button>
+              <button
+                type="button"
+                className={`role-filter-pill ${
+                  userRoleFilter === 'admin' ? 'active' : ''
+                }`}
+                onClick={() => setUserRoleFilter('admin')}
+              >
+                {t.filterAdmins} ({adminCount})
+              </button>
+              <button
+                type="button"
+                className={`role-filter-pill ${
+                  userRoleFilter === 'user' ? 'active' : ''
+                }`}
+                onClick={() => setUserRoleFilter('user')}
+              >
+                {t.filterRegularUsers} ({regularUserCount})
+              </button>
+            </div>
+          </div>
 
           <div className="admin-users-list">
-            {usersToDisplay.map((u) => (
-              <div key={u.id} className="admin-user-row">
-                <div className="admin-user-meta">
-                  <div className="admin-user-avatar">{getInitials(u.login)}</div>
-                  <div className="admin-user-text">
-                    <span className="admin-user-login">{u.login}</span>
-                    <span className="admin-user-email">{u.email}</span>
+            {filteredAdminUsers.length === 0 ? (
+              <div className="profile-empty-posts">{t.noUsersFound}</div>
+            ) : (
+              filteredAdminUsers.map((u) => {
+                const uAvatar = avatarUrl(u);
+                return (
+                  <div key={u.id} className="admin-user-row">
+                    <div
+                      className="admin-user-meta"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => dispatch(openUserProfile(u))}
+                    >
+                      <div className="admin-user-avatar">
+                        {uAvatar ? (
+                          <img
+                            src={uAvatar}
+                            alt={u.login}
+                            className="user-avatar-img"
+                          />
+                        ) : (
+                          getInitials(u.login)
+                        )}
+                      </div>
+                      <div className="admin-user-text">
+                        <span className="admin-user-login">{u.login}</span>
+                        <span className="admin-user-email">{u.email}</span>
+                      </div>
+                    </div>
+
+                    <div className="admin-user-controls">
+                      <span
+                        className={`profile-role-badge ${
+                          u.role === 'admin' ? 'admin' : 'user'
+                        }`}
+                        title={t.roleSetAtCreationHint}
+                      >
+                        {u.role === 'admin' ? t.roleAdmin : t.roleUser}
+                      </span>
+
+                      <button
+                        type="button"
+                        className="admin-action-btn"
+                        onClick={() => dispatch(openUserProfile(u))}
+                      >
+                        {t.editBtn}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-delete-user-btn"
+                        onClick={() => handleDeleteUser(u.id)}
+                        disabled={Number(u.id) === Number(user?.id)}
+                      >
+                        {t.deleteBtn}
+                      </button>
+                    </div>
                   </div>
-                </div>
-
-                <div className="admin-user-controls">
-                  <select
-                    className="profile-select compact"
-                    value={u.role || 'user'}
-                    onChange={(e) =>
-                      dispatch(adminUpdateUserRole({ userId: u.id, role: e.target.value }))
-                    }
-                  >
-                    <option value="user">user</option>
-                    <option value="admin">admin</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    className="admin-delete-user-btn"
-                    onClick={() => dispatch(adminDeleteUser(u.id))}
-                    disabled={Number(u.id) === Number(user?.id)}
-                  >
-                    🗑️ {t.deleteBtn || 'Видалити'}
-                  </button>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            )}
           </div>
         </section>
       )}
 
-      {/* Секция вопросов пользователя */}
       <section className="profile-section-card">
         <div className="section-card-header">
           <div>
             <h3 className="section-card-title">
               {isOwnProfile
-                ? language === 'en'
-                  ? 'My Questions'
-                  : 'Мої питання'
-                : `${language === 'en' ? 'Questions by' : 'Питання користувача'} ${
-                    targetUser.login
-                  }`}
+                ? t.myQuestionsTitle
+                : `${t.userQuestionsTitle} ${targetUser.login}`}
             </h3>
           </div>
           <span className="section-count-badge">{userPosts.length}</span>
@@ -536,15 +773,15 @@ const ProfilePage = () => {
 
         <div className="profile-posts-toolbar">
           <div className="profile-toolbar-group">
-            <label>{t.categoryFilterLabel || 'Категорія:'}</label>
+            <label>{t.categoryFilterLabel}</label>
             <select
               className="profile-select compact"
               value={profileCategoryFilter}
               onChange={(e) => setProfileCategoryFilter(e.target.value)}
             >
-              <option value="all">{t.allCategoriesOption || 'Усі теми'}</option>
+              <option value="all">{t.allCategoriesOption}</option>
               {categories.map((cat) => (
-                <option key={cat.id || cat.title} value={cat.title}>
+                <option key={cat.id} value={cat.id}>
                   {cat.title}
                 </option>
               ))}
@@ -552,14 +789,14 @@ const ProfilePage = () => {
           </div>
 
           <div className="profile-toolbar-group">
-            <label>{t.sortByLabel || 'Сортувати:'}</label>
+            <label>{t.sortByLabel}</label>
             <select
               className="profile-select compact"
               value={profileSortBy}
               onChange={(e) => setProfileSortBy(e.target.value)}
             >
-              <option value="date">{t.sortByDate || 'За датою'}</option>
-              <option value="likes">{t.sortByLikesOption || 'За вподобайками'}</option>
+              <option value="date">{t.sortByDate}</option>
+              <option value="likes">{t.sortByLikesOption}</option>
             </select>
 
             <select
@@ -567,85 +804,114 @@ const ProfilePage = () => {
               value={profileSortOrder}
               onChange={(e) => setProfileSortOrder(e.target.value)}
             >
-              <option value="desc">{t.orderDesc || 'За спаданням (↓)'}</option>
-              <option value="asc">{t.orderAsc || 'За зростанням (↑)'}</option>
+              <option value="desc">{t.orderDesc}</option>
+              <option value="asc">{t.orderAsc}</option>
             </select>
           </div>
         </div>
 
-        {userPosts.length === 0 ? (
-          <div className="profile-empty-posts">
-            {language === 'en'
-              ? 'No publications found for the selected filter.'
-              : 'Публікацій за обраними параметрами ще немає.'}
-          </div>
+        {visibleUserPosts.length === 0 ? (
+          <div className="profile-empty-posts">{t.noUserPosts}</div>
         ) : (
           <div className="profile-posts-list">
-            {userPosts.map((post) => (
-              <div key={post.id} className="profile-post-item">
-                <div
-                  className="profile-post-main"
-                  onClick={() => {
-                    dispatch(closeProfilePage());
-                    dispatch(openPostPage(post.id));
-                  }}
-                >
-                  <div className="profile-post-top">
-                    <span
-                      className={`profile-post-status ${
-                        post.status === 'inactive' ? 'inactive' : 'active'
-                      }`}
-                    >
-                      {post.status === 'inactive'
-                        ? t.badgeInactive || 'Неактивний'
-                        : t.badgeActive || 'Активний'}
-                    </span>
-                    <span className="profile-post-title">{post.title}</span>
-                  </div>
-                  <div className="profile-post-meta">
-                    <span>★ {post.votes ?? post.likes_count ?? 0}</span>
-                    <span>•</span>
-                    <span>
-                      {Array.isArray(post.categories) && post.categories.length > 0
-                        ? post.categories
-                            .map((c) => (typeof c === 'object' ? c.title : c))
-                            .join(', ')
-                        : t.generalTopic || 'Загальне'}
-                    </span>
-                  </div>
-                </div>
+            {visibleUserPosts.map((post) => {
+              const postCats =
+                previewCategoriesByPost[post.id] ||
+                (Array.isArray(post.categories) ? post.categories : []);
+              const postScore = Number(
+                postLikesMap[post.id] ?? post.likes_count ?? 0
+              );
 
-                {(isOwnProfile || isAdmin) && (
-                  <div className="profile-post-actions">
-                    {isOwnProfile && (
+              return (
+                <div key={post.id} className="profile-post-item">
+                  <div
+                    className="profile-post-main"
+                    onClick={() => {
+                      dispatch(closeProfilePage());
+                      dispatch(openPostPage(post.id));
+                    }}
+                  >
+                    <div className="profile-post-top">
+                      <span
+                        className={`profile-post-status ${
+                          post.status === 'inactive' ? 'inactive' : 'active'
+                        }`}
+                      >
+                        {post.status === 'inactive'
+                          ? t.badgeInactive
+                          : t.badgeActive}
+                      </span>
+                      <span className="profile-post-title">{post.title}</span>
+                    </div>
+                    <div className="profile-post-meta">
+                      <span>★ {postScore}</span>
+                      <span>•</span>
+                      <span>{formatDate(post.publish_date, language)}</span>
+                      <span>•</span>
+                      <span>
+                        {postCats.length > 0
+                          ? postCats
+                              .map((c) => (typeof c === 'object' ? c.title : c))
+                              .join(', ')
+                          : t.generalTopic}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(isOwnProfile || isAdmin) && (
+                    <div className="profile-post-actions">
+                      {isOwnProfile && (
+                        <button
+                          type="button"
+                          className="admin-action-btn"
+                          onClick={() =>
+                            dispatch(
+                              openAskModal({
+                                ...post,
+                                categories: postCats,
+                              })
+                            )
+                          }
+                        >
+                          {t.editBtn}
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="admin-action-btn"
+                          onClick={() => handleTogglePostStatus(post)}
+                        >
+                          {post.status === 'inactive'
+                            ? t.activateBtn
+                            : t.deactivateBtn}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="admin-action-btn"
-                        onClick={() => dispatch(openAskModal(post))}
+                        className="admin-delete-user-btn"
+                        onClick={() => handleDeletePost(post.id)}
                       >
-                        ✎ {t.editBtn || 'Редагувати'}
+                        {t.deleteBtn}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="admin-action-btn"
-                      onClick={() => handleTogglePostStatus(post)}
-                    >
-                      {post.status === 'inactive'
-                        ? t.activateBtn || 'Активувати'
-                        : t.deactivateBtn || 'Деактивувати'}
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-delete-user-btn"
-                      onClick={() => dispatch(deleteExistingPost(post.id))}
-                    >
-                      {t.deleteBtn || 'Видалити'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {visibleUserPosts.length < userPosts.length && (
+              <button
+                type="button"
+                className="profile-back-btn"
+                onClick={() =>
+                  setVisiblePostsCount((prev) => prev + PROFILE_POSTS_STEP)
+                }
+              >
+                {t.showMoreUserPostsBtn} ({visibleUserPosts.length} /{' '}
+                {userPosts.length})
+              </button>
+            )}
           </div>
         )}
       </section>

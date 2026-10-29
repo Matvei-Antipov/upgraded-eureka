@@ -6,13 +6,14 @@ import {
   closePostPage,
   openAskModal,
 } from '../../store/postsSlice';
-import { closeProfilePage } from '../../store/authSlice';
+import { closeProfilePage, openAuthModal } from '../../store/authSlice';
 import { translations } from '../../i18n/translations';
 import './Footer.css';
 
 const Footer = () => {
   const dispatch = useDispatch();
-  const { language } = useSelector((state) => state.auth);
+  const { user, language } = useSelector((state) => state.auth);
+  const { apiConnected } = useSelector((state) => state.posts);
   const t = translations[language] || translations.uk;
 
   const handleNav = (mode) => {
@@ -24,6 +25,10 @@ const Footer = () => {
   };
 
   const handleAsk = () => {
+    if (!user) {
+      dispatch(openAuthModal('login'));
+      return;
+    }
     dispatch(openAskModal(null));
   };
 
@@ -33,9 +38,7 @@ const Footer = () => {
         <div className="footer-brand-col">
           <div className="footer-brand">
             <span className="footer-logo-box">{'</>'}</span>
-            <span className="footer-brand-title">
-              {t.brandTitle || 'розбір'}
-            </span>
+            <span className="footer-brand-title">{t.brandTitle}</span>
           </div>
           <p className="footer-desc">{t.footerDesc}</p>
         </div>
@@ -76,12 +79,15 @@ const Footer = () => {
         <div className="footer-status-col">
           <h4 className="footer-heading">{t.footerSystem}</h4>
           <div className="footer-status-badge">
-            <span className="status-dot" />
-            <span>{t.footerApiConnected}</span>
+            <span
+              className={`status-dot ${apiConnected ? '' : 'offline'}`}
+            />
+            <span>
+              {apiConnected ? t.footerApiConnected : t.footerApiDisconnected}
+            </span>
           </div>
           <p className="footer-copy">
-            © {new Date().getFullYear()} {t.brandTitle || 'розбір'}.{' '}
-            {t.footerRights}
+            © {new Date().getFullYear()} {t.brandTitle}. {t.footerRights}
           </p>
         </div>
       </div>

@@ -181,3 +181,25 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+
+.auth-success-banner {
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (max-width: 520px) {
+  .auth-modal-card {
+    margin: 12px;
+    padding: 18px 16px;
+  }
+
+  .auth-tabs {
+    flex-wrap: wrap;
+  }
+}

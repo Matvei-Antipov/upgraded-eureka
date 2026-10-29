@@ -5,22 +5,24 @@ import Sidebar from '../Sidebar/Sidebar';
 import PostFeed from '../PostFeed/PostFeed';
 import PostPage from '../PostPage/PostPage';
 import ProfilePage from '../ProfilePage/ProfilePage';
-import AuthModal from '../AuthModal/AuthModal';
-import AskQuestionModal from '../AskQuestionModal/AskQuestionModal';
 import Footer from '../Footer/Footer';
+import AskQuestionModal from '../AskQuestionModal/AskQuestionModal';
+import AuthModal from '../AuthModal/AuthModal';
 import {
   clearNotification,
-  clearCommentAlert,
   checkIncomingComments,
+  clearCommentAlert,
   openPostPage,
   setHighlightedCommentId,
+  checkApiHealth,
 } from '../../store/postsSlice';
 import {
   verifySession,
   setResetTokenFromUrl,
   closeProfilePage,
 } from '../../store/authSlice';
-import { translations } from '../../i18n/translations';
+import { translations, translateMessage } from '../../i18n/translations';
+import { COMMENT_POLL_INTERVAL_MS, TOAST_DURATION_MS } from '../../config';
 import './MainPage.css';
 
 const MainPage = () => {
@@ -30,17 +32,33 @@ const MainPage = () => {
     notification,
     commentAlert,
   } = useSelector((state) => state.posts);
-  const { isProfileOpen, user, language } = useSelector((state) => state.auth);
-
+  const {
+    isProfileOpen,
+    user,
+    language = 'uk',
+  } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
 
   useEffect(() => {
     dispatch(verifySession());
+    dispatch(checkApiHealth());
 
     const params = new URLSearchParams(window.location.search);
-    const resetToken = params.get('resetToken') || params.get('token');
-    if (resetToken) {
-      dispatch(setResetTokenFromUrl(resetToken));
+    const sharedPostId = params.get('post');
+    if (sharedPostId && !Number.isNaN(Number(sharedPostId))) {
+      dispatch(openPostPage(Number(sharedPostId)));
+    }
+
+    const pathMatch = window.location.pathname.match(
+      /password-reset\/([a-zA-Z0-9_-]+)/
+    );
+    const tokenFromUrl =
+      params.get('token') ||
+      params.get('reset_token') ||
+      params.get('resetToken') ||
+      (pathMatch ? pathMatch[1] : '');
+    if (tokenFromUrl) {
+      dispatch(setResetTokenFromUrl(tokenFromUrl));
     }
   }, [dispatch]);
 
@@ -48,7 +66,7 @@ const MainPage = () => {
     if (!notification) return undefined;
     const timer = setTimeout(() => {
       dispatch(clearNotification());
-    }, 3500);
+    }, TOAST_DURATION_MS);
     return () => clearTimeout(timer);
   }, [notification, dispatch]);
 
@@ -57,9 +75,20 @@ const MainPage = () => {
     dispatch(checkIncomingComments());
     const interval = setInterval(() => {
       dispatch(checkIncomingComments());
-    }, 8000);
+    }, COMMENT_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [dispatch, user]);
+  }, [user, dispatch]);
+
+  const toastText = notification
+    ? typeof notification === 'string'
+      ? translateMessage(language, notification, notification)
+      : translateMessage(language, notification.key, notification.detail || '')
+    : '';
+
+  const toastType =
+    notification && typeof notification === 'object'
+      ? notification.type || 'success'
+      : 'success';
 
   const handleOpenAlertComment = () => {
     if (!commentAlert) return;
@@ -75,13 +104,20 @@ const MainPage = () => {
     <div className="app-wrapper">
       <Header />
 
-      {notification && (
+      {notification && toastText && (
         <div className="toast-container" role="status" aria-live="polite">
-          <div className={`toast-banner ${notification.type || 'success'}`}>
+          <div className={`toast-banner ${toastType}`}>
             <span className="toast-icon">
-              {notification.type === 'error' ? '⚠️' : '✓'}
+              {toastType === 'error' ? '⚠️' : '✓'}
             </span>
-            <span className="toast-text">{notification.message}</span>
+            <span className="toast-text">
+              {toastText}
+              {notification?.detail &&
+              toastType === 'error' &&
+              notification.detail !== toastText
+                ? ` (${notification.detail})`
+                : ''}
+            </span>
             <button
               type="button"
               className="toast-close-btn"
@@ -98,20 +134,23 @@ const MainPage = () => {
         <div className="comment-alert-container" role="alert">
           <div className="comment-alert-card">
             <div className="comment-alert-header">
-              <strong>{t.newCommentAlertTitle}</strong>
+              <strong>🔔 {t.newCommentAlertTitle}</strong>
               <button
                 type="button"
                 className="comment-alert-close"
                 onClick={() => dispatch(clearCommentAlert())}
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
             <p className="comment-alert-body">
               <strong>{commentAlert.authorLogin}</strong>{' '}
-              {t.commentedOnYourPost} «{commentAlert.postTitle}»:
+              {t.commentedOnYourPost} «{commentAlert.postTitle}»
             </p>
-            <p className="comment-alert-snippet">{commentAlert.content}</p>
+            {commentAlert.content && (
+              <p className="comment-alert-snippet">{commentAlert.content}</p>
+            )}
             <button
               type="button"
               className="comment-alert-action"
@@ -123,9 +162,9 @@ const MainPage = () => {
         </div>
       )}
 
-      <main className="main-container">
+      <div className="main-container">
         <Sidebar />
-        <div className="main-content-area">
+        <main className="main-content-area">
           {isProfileOpen ? (
             <ProfilePage />
           ) : selectedPostId ? (
@@ -133,11 +172,11 @@ const MainPage = () => {
           ) : (
             <PostFeed />
           )}
-        </div>
-      </main>
+        </main>
+      </div>
 
-      <AuthModal />
       <AskQuestionModal />
+      <AuthModal />
       <Footer />
     </div>
   );

@@ -14,13 +14,18 @@ import './Sidebar.css';
 
 const Sidebar = () => {
   const dispatch = useDispatch();
-  const { categories, categoryId, viewMode, sortBy, savedPosts } = useSelector(
-    (state) => state.posts
-  );
-  const { language } = useSelector((state) => state.auth);
+  const {
+    categories,
+    categoryId,
+    viewMode,
+    sortBy,
+    savedPostsByUser,
+  } = useSelector((state) => state.posts);
+  const { user, language } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
 
-  const savedCount = Object.keys(savedPosts || {}).length;
+  const bucketKey = String(user?.id || 'guest');
+  const savedCount = Object.keys(savedPostsByUser?.[bucketKey] || {}).length;
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -53,7 +58,7 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" aria-label={t.navSection}>
       <div className="sidebar-block">
         <h3 className="sidebar-heading">{t.navSection}</h3>
         <ul className="sidebar-nav">
@@ -129,8 +134,6 @@ const Sidebar = () => {
           </li>
         </ul>
       </div>
-
-      <div className="sidebar-divider" />
 
       <div className="sidebar-block">
         <h3 className="sidebar-heading">{t.categoriesSection}</h3>

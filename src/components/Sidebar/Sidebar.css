@@ -1,5 +1,5 @@
 .sidebar {
-  width: 230px;
+  width: 240px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -13,25 +13,26 @@
 }
 
 .sidebar-heading {
+  margin: 0;
+  padding: 0 12px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.08em;
   color: #9ca3af;
-  margin: 0 0 4px 10px;
 }
 
 .sidebar-divider {
   height: 1px;
-  background-color: #f1f5f9;
-  margin: 4px 0;
+  background-color: #e5e7eb;
+  margin: 4px 12px;
 }
 
 .sidebar-nav,
 .sidebar-categories {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -41,69 +42,16 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  background-color: transparent;
+  gap: 10px;
+  padding: 10px 12px;
   border: none;
+  border-radius: 8px;
+  background: transparent;
   color: #4b5563;
   font-size: 14px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.sidebar-icon {
-  font-size: 15px;
-  color: #6b7280;
-  width: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.sidebar-text {
-  color: inherit;
-  flex: 1;
-}
-
-/* Монохромный Ч/Б-серый бейдж количества сохранённых вопросов */
-.saved-count-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
-  transition: all 0.25s ease;
-}
-
-.saved-count-badge.has-items {
-  background-color: #111827;
-  color: #ffffff !important;
-  border: 1px solid #374151;
-  box-shadow: 0 0 0 3px #e5e7eb, 0 2px 8px rgba(17, 24, 39, 0.25);
-  animation: savedMonoPulse 2.2s infinite ease-in-out;
-}
-
-@keyframes savedMonoPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px #e5e7eb, 0 2px 6px rgba(17, 24, 39, 0.18);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4px #d1d5db, 0 3px 10px rgba(17, 24, 39, 0.32);
-    transform: scale(1.06);
-  }
 }
 
 .sidebar-item:hover {
@@ -114,37 +62,56 @@
 .sidebar-item.active {
   background-color: #f3f4f6;
   color: #111827;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.sidebar-item.active .sidebar-icon {
-  color: #111827;
+.sidebar-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Статичный счетчик сохраненных постов без пульсации и без свечения */
+.saved-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 600;
+  animation: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.saved-count-badge.has-items {
+  background-color: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  animation: none !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .sidebar-cat-btn {
-  width: 100%;
-  display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  background-color: transparent;
-  border: none;
-  color: #374151;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.sidebar-cat-btn:hover {
-  background-color: #f3f4f6;
-  color: #111827;
-}
-
-.sidebar-cat-btn.active {
-  background-color: #f3f4f6;
-  color: #111827;
+  padding: 8px 12px;
 }
 
 .category-name {
@@ -155,18 +122,17 @@
 
 .category-desc {
   font-size: 11px;
-  color: #9ca3af;
-  line-height: 1.35;
+  color: #6b7280;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .sidebar-empty {
+  padding: 8px 12px;
   font-size: 12px;
   color: #9ca3af;
-  padding: 6px 10px;
 }
 
 @media (max-width: 900px) {
@@ -174,15 +140,10 @@
     width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 16px;
   }
 
   .sidebar-block {
     flex: 1;
     min-width: 240px;
-  }
-
-  .sidebar-divider {
-    display: none;
   }
 }

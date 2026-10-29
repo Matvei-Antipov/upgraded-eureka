@@ -1,32 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
-  logoutUser,
+  setSearchQuery,
+  setCategoryId,
+  setViewMode,
+  closePostPage,
+} from '../../store/postsSlice';
+import {
   openAuthModal,
+  logoutUser,
   openProfilePage,
   closeProfilePage,
   setLanguage,
 } from '../../store/authSlice';
-import {
-  setSearchQuery,
-  closePostPage,
-  setCategoryId,
-  setViewMode,
-} from '../../store/postsSlice';
 import { translations } from '../../i18n/translations';
+import { avatarUrl, getInitials } from '../../utils/format';
 import './Header.css';
 
 const Header = () => {
   const dispatch = useDispatch();
-  const { user, avatarUrl, language } = useSelector((state) => state.auth);
   const { searchQuery } = useSelector((state) => state.posts);
-  const [imgError, setImgError] = useState(false);
-
+  const { user, isAuthenticated, language = 'uk' } = useSelector(
+    (state) => state.auth
+  );
   const t = translations[language] || translations.uk;
-
-  useEffect(() => {
-    setImgError(false);
-  }, [avatarUrl, user]);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const handleLogoClick = () => {
     dispatch(closeProfilePage());
@@ -35,21 +33,25 @@ const Header = () => {
     dispatch(setViewMode('all'));
   };
 
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(/[\s_]+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
+  const handleAvatarOrProfileClick = () => {
+    if (isAuthenticated && user) {
+      dispatch(closePostPage());
+      dispatch(openProfilePage(null));
+    } else {
+      dispatch(openAuthModal('login'));
     }
-    return name.slice(0, 2).toUpperCase();
   };
 
-  const isValidAvatar =
-    avatarUrl &&
-    !imgError &&
-    !avatarUrl.endsWith('default.png') &&
-    avatarUrl !== 'null' &&
-    avatarUrl !== 'undefined';
+  const displayLogin =
+    isAuthenticated && user ? user.login : t.guestName || 'Guest';
+  const displayRole =
+    isAuthenticated && user
+      ? user.role === 'admin'
+        ? t.roleAdmin
+        : t.roleUser
+      : t.guestRole;
+  const resolvedAvatar =
+    isAuthenticated && user && !imgFailed ? avatarUrl(user) : null;
 
   return (
     <header className="header">
@@ -59,34 +61,47 @@ const Header = () => {
           onClick={handleLogoClick}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') handleLogoClick();
-          }}
+          onKeyDown={(e) => e.key === 'Enter' && handleLogoClick()}
         >
-          <div className="brand-logo-box">{'</>'}</div>
+          <div className="brand-logo-box" aria-hidden="true">
+            &lt;/&gt;
+          </div>
           <div className="brand-text">
-            <span className="brand-title">{t.brandTitle || 'розбір'}</span>
+            <span className="brand-title">{t.brandTitle}</span>
             <span className="brand-subtitle">{t.brandSubtitle}</span>
           </div>
         </div>
 
         <div className="header-search">
-          <span className="search-icon" aria-hidden="true">
-            🔍
-          </span>
+          <svg
+            className="search-icon"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             type="text"
             className="search-input"
             placeholder={t.searchPlaceholder}
             value={searchQuery}
-            onChange={(e) => dispatch(setSearchQuery(e.target.value))}
+            onChange={(e) => {
+              dispatch(closeProfilePage());
+              dispatch(closePostPage());
+              dispatch(setSearchQuery(e.target.value));
+            }}
           />
           {searchQuery && (
             <button
               type="button"
               className="search-clear-btn"
-              title={t.clearSearch}
               onClick={() => dispatch(setSearchQuery(''))}
+              aria-label={t.clearSearch}
             >
               ✕
             </button>
@@ -94,7 +109,7 @@ const Header = () => {
         </div>
 
         <div className="header-actions">
-          <div className="lang-switcher" role="group" aria-label="Language">
+          <div className="lang-switcher">
             <button
               type="button"
               className={`lang-btn ${language === 'uk' ? 'active' : ''}`}
@@ -111,45 +126,39 @@ const Header = () => {
             </button>
           </div>
 
-          {user ? (
-            <div className="header-user-area">
-              <div
-                className="user-profile-trigger"
-                onClick={() => dispatch(openProfilePage())}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    dispatch(openProfilePage());
-                  }
-                }}
+          <div
+            className="user-profile-trigger"
+            onClick={handleAvatarOrProfileClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && handleAvatarOrProfileClick()}
+          >
+            <div className="user-info-text">
+              <span className="user-login">{displayLogin}</span>
+              <span
+                className={`user-role-badge ${
+                  isAuthenticated && user?.role === 'admin' ? 'admin' : ''
+                }`}
               >
-                <div className="user-info-text">
-                  <span className="user-login">
-                    {user.login || user.full_name || t.guestName}
-                  </span>
-                  <span
-                    className={`user-role-badge ${
-                      user.role === 'admin' ? 'admin' : 'user'
-                    }`}
-                  >
-                    {user.role === 'admin' ? t.roleAdmin : t.roleUser}
-                  </span>
-                </div>
-                <div className="user-avatar">
-                  {isValidAvatar ? (
-                    <img
-                      src={avatarUrl}
-                      alt={user.login || 'avatar'}
-                      className="user-avatar-img"
-                      onError={() => setImgError(true)}
-                    />
-                  ) : (
-                    <span>{getInitials(user.login || user.full_name)}</span>
-                  )}
-                </div>
-              </div>
+                {displayRole}
+              </span>
+            </div>
+            <div className="user-avatar" aria-label="User avatar">
+              {resolvedAvatar ? (
+                <img
+                  src={resolvedAvatar}
+                  alt={displayLogin}
+                  className="user-avatar-img"
+                  onError={() => setImgFailed(true)}
+                />
+              ) : (
+                <span>{getInitials(displayLogin)}</span>
+              )}
+            </div>
+          </div>
 
+          {isAuthenticated && user ? (
+            <div className="header-user-area">
               <button
                 type="button"
                 className="logout-btn"
@@ -160,7 +169,6 @@ const Header = () => {
             </div>
           ) : (
             <div className="header-guest-area">
-              <span className="guest-badge">{t.guestRole}</span>
               <button
                 type="button"
                 className="login-btn"
