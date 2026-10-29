@@ -18,6 +18,7 @@ import {
 } from '../../store/postsSlice';
 import {
   verifySession,
+  getJwtSession,
   setResetTokenFromUrl,
   closeProfilePage,
 } from '../../store/authSlice';
@@ -61,6 +62,18 @@ const MainPage = () => {
       dispatch(setResetTokenFromUrl(tokenFromUrl));
     }
   }, [dispatch]);
+
+  useEffect(() => {
+    const session = getJwtSession();
+    if (
+      session &&
+      (!user ||
+        Number(user.id) !== Number(session.userId) ||
+        user.role !== session.role)
+    ) {
+      dispatch(verifySession());
+    }
+  }, [user, dispatch]);
 
   useEffect(() => {
     if (!notification) return undefined;

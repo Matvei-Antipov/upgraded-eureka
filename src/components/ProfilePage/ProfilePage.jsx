@@ -5,6 +5,8 @@ import {
   openProfilePage,
   openUserProfile,
   fetchUserById,
+  verifySession,
+  getJwtSession,
   updateUserProfile,
   uploadUserAvatar,
   fetchAllUsers,
@@ -57,12 +59,24 @@ const ProfilePage = () => {
   const language = authLang || 'uk';
   const t = translations[language] || translations.uk;
 
-  const targetUser = viewedProfileUser || user;
+  const jwtSession = getJwtSession();
+  const effectiveOwnId = jwtSession?.userId || user?.id;
   const isOwnProfile =
     !viewedProfileUser ||
-    (user && Number(targetUser?.id) === Number(user?.id));
-  const isAdmin = user?.role === 'admin';
-  const canEditProfile = Boolean(user && (isOwnProfile || isAdmin));
+    !viewedProfileUser.id ||
+    Boolean(
+      effectiveOwnId &&
+        Number(viewedProfileUser.id) === Number(effectiveOwnId)
+    );
+  const targetUser = isOwnProfile
+    ? user || viewedProfileUser
+    : viewedProfileUser;
+  const isAdmin =
+    (jwtSession ? jwtSession.role === 'admin' : user?.role === 'admin') &&
+    user?.role === 'admin';
+  const canEditProfile = Boolean(
+    (jwtSession || user) && (isOwnProfile || isAdmin)
+  );
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -92,6 +106,20 @@ const ProfilePage = () => {
   const [profileSortOrder, setProfileSortOrder] = useState('desc');
   const [visiblePostsCount, setVisiblePostsCount] =
     useState(PROFILE_POSTS_STEP);
+
+  useEffect(() => {
+    const session = getJwtSession();
+    if (
+      session &&
+      (!user ||
+        Number(user.id) !== Number(session.userId) ||
+        user.role !== session.role ||
+        !user.email ||
+        !user.login)
+    ) {
+      dispatch(verifySession());
+    }
+  }, [user, dispatch]);
 
   useEffect(() => {
     setAvatarFailed(false);
@@ -215,11 +243,15 @@ const ProfilePage = () => {
     try {
       await dispatch(
         updateUserProfile({
-          userId: targetUser.id,
+          userId: isOwnProfile
+            ? jwtSession?.userId || user?.id
+            : targetUser.id,
+          isOwnProfile,
           full_name: fullName.trim(),
           email: email.trim(),
         })
       ).unwrap();
+      dispatch(showNotification({ key: 'profileSavedToast', type: 'success' }));
     } catch (err) {
       setProfileFormError(
         err?.detail || translateMessage(language, err?.key, t.actionFailedError)

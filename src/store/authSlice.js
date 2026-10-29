@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api, {
   TOKEN_KEY,
+  getStoredToken,
   parseJwt,
   isTokenExpired,
   toApiError,
@@ -12,16 +13,42 @@ cleanupLegacyStorage();
 const USER_CACHE_KEY = 'usof_current_user';
 const pendingUserRequests = new Set();
 
+export const getJwtSession = () => {
+  const token = getStoredToken();
+  if (!token || isTokenExpired(token)) return null;
+  const payload = parseJwt(token);
+  const userId = Number(payload?.userId || payload?.id);
+  if (!userId || Number.isNaN(userId)) return null;
+  return {
+    token,
+    userId,
+    role: payload?.role || 'user',
+  };
+};
+
 const loadCachedUser = () => {
   try {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token || isTokenExpired(token)) {
+    const session = getJwtSession();
+    if (!session) {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_CACHE_KEY);
       return null;
     }
     const raw = localStorage.getItem(USER_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && Number(parsed.id) === session.userId) {
+      return {
+        ...parsed,
+        id: session.userId,
+        role: session.role || parsed.role || 'user',
+      };
+    }
+    localStorage.removeItem(USER_CACHE_KEY);
+    return {
+      id: session.userId,
+      login: `user_${session.userId}`,
+      role: session.role,
+    };
   } catch {
     return null;
   }
@@ -42,38 +69,40 @@ const saveCachedUser = (user) => {
 export const verifySession = createAsyncThunk(
   'auth/verifySession',
   async (_, { getState, rejectWithValue }) => {
-    const { token, user } = getState().auth;
-    if (!token || isTokenExpired(token)) {
+    const session = getJwtSession();
+    if (!session) {
       localStorage.removeItem(TOKEN_KEY);
       saveCachedUser(null);
       return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
     }
 
-    const payload = parseJwt(token);
-    const userId = payload?.userId || payload?.id || user?.id;
-    if (!userId) {
-      localStorage.removeItem(TOKEN_KEY);
-      saveCachedUser(null);
-      return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
-    }
+    const { user } = getState().auth;
 
     try {
-      const res = await api.get(`/users/${userId}`);
+      const res = await api.get(`/users/${session.userId}`);
       const fetched = res.data?.user || res.data?.data || res.data;
       if (!fetched || !fetched.id) {
         localStorage.removeItem(TOKEN_KEY);
         saveCachedUser(null);
         return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
       }
-      saveCachedUser(fetched);
-      return fetched;
+      const normalized = {
+        ...fetched,
+        id: session.userId,
+        role: session.role || fetched.role || 'user',
+      };
+      saveCachedUser(normalized);
+      return normalized;
     } catch (error) {
       if (error.response?.status === 404 || error.response?.status === 401) {
         localStorage.removeItem(TOKEN_KEY);
         saveCachedUser(null);
         return rejectWithValue(toApiError(error, 'sessionExpiredToast'));
       }
-      return user;
+      if (user && Number(user.id) === session.userId) {
+        return { ...user, id: session.userId, role: session.role || user.role };
+      }
+      return rejectWithValue(toApiError(error, 'sessionExpiredToast'));
     }
   }
 );
@@ -104,7 +133,7 @@ export const fetchUserById = createAsyncThunk(
       const key = String(userId);
       const existing = getState().auth.usersMap[key];
       if (
-        (existing && (existing.email || existing._notFound)) ||
+        (existing && existing.id && (existing.email || existing._notFound)) ||
         pendingUserRequests.has(key)
       ) {
         return false;
@@ -244,11 +273,27 @@ export const confirmPasswordReset = createAsyncThunk(
 
 export const updateUserProfile = createAsyncThunk(
   'auth/updateUserProfile',
-  async ({ userId, full_name, email }, { getState, rejectWithValue }) => {
+  async (
+    { userId, full_name, email, isOwnProfile },
+    { getState, rejectWithValue }
+  ) => {
+    const session = getJwtSession();
     const { user } = getState().auth;
-    const targetId = Number(userId || user?.id);
+    if (!session) {
+      return rejectWithValue(toApiError(null, 'sessionExpiredToast'));
+    }
+
+    const requestedId = Number(userId || user?.id);
+    const targetId =
+      isOwnProfile ||
+      session.role !== 'admin' ||
+      !requestedId ||
+      Number.isNaN(requestedId)
+        ? session.userId
+        : requestedId;
+
     const cleanFullName = full_name?.trim();
-    const cleanEmail = email?.trim();
+    const cleanEmail = email?.trim() || user?.email;
 
     try {
       await api.patch(`/users/${targetId}`, {
@@ -259,8 +304,14 @@ export const updateUserProfile = createAsyncThunk(
       const refreshed = await api.get(`/users/${targetId}`);
       const updatedUser = refreshed.data;
 
-      if (user && Number(user.id) === targetId) {
-        saveCachedUser(updatedUser);
+      if (targetId === session.userId) {
+        const normalizedOwn = {
+          ...updatedUser,
+          id: session.userId,
+          role: session.role || updatedUser.role || 'user',
+        };
+        saveCachedUser(normalizedOwn);
+        return normalizedOwn;
       }
       return updatedUser;
     } catch (error) {
@@ -270,7 +321,17 @@ export const updateUserProfile = createAsyncThunk(
         String(error.response?.data?.error || '').includes('no changes')
       ) {
         const refreshed = await api.get(`/users/${targetId}`);
-        return refreshed.data;
+        const updatedUser = refreshed.data;
+        if (targetId === session.userId) {
+          const normalizedOwn = {
+            ...updatedUser,
+            id: session.userId,
+            role: session.role || updatedUser.role || 'user',
+          };
+          saveCachedUser(normalizedOwn);
+          return normalizedOwn;
+        }
+        return updatedUser;
       }
       return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
@@ -280,6 +341,7 @@ export const updateUserProfile = createAsyncThunk(
 export const uploadUserAvatar = createAsyncThunk(
   'auth/uploadUserAvatar',
   async (file, { getState, rejectWithValue }) => {
+    const session = getJwtSession();
     const { user } = getState().auth;
     const formData = new FormData();
     formData.append('avatar', file);
@@ -297,7 +359,12 @@ export const uploadUserAvatar = createAsyncThunk(
         return rejectWithValue(toApiError(null, 'actionFailedError'));
       }
 
-      const updated = { ...user, profile_picture: filename };
+      const updated = {
+        ...user,
+        id: session?.userId || user?.id,
+        role: session?.role || user?.role || 'user',
+        profile_picture: filename,
+      };
       saveCachedUser(updated);
       return updated;
     } catch (error) {
@@ -467,10 +534,18 @@ const authSlice = createSlice({
     builder
       .addCase(verifySession.fulfilled, (state, action) => {
         if (action.payload) {
+          state.token = getStoredToken() || state.token;
           state.user = action.payload;
           state.isAuthenticated = true;
           if (action.payload.id) {
             state.usersMap[String(action.payload.id)] = action.payload;
+          }
+          if (
+            state.viewedProfileUser &&
+            (!state.viewedProfileUser.id ||
+              Number(state.viewedProfileUser.id) === Number(action.payload.id))
+          ) {
+            state.viewedProfileUser = null;
           }
         }
       })
@@ -505,6 +580,7 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.isAuthenticated = true;
         state.isAuthModalOpen = false;
+        state.viewedProfileUser = null;
         if (action.payload.user?.id) {
           state.usersMap[String(action.payload.user.id)] = action.payload.user;
         }
@@ -564,15 +640,23 @@ const authSlice = createSlice({
       .addCase(updateUserProfile.fulfilled, (state, action) => {
         const updated = action.payload;
         if (!updated?.id) return;
+        const session = getJwtSession();
         state.usersMap[String(updated.id)] = updated;
-        if (state.user && Number(state.user.id) === Number(updated.id)) {
+        if (
+          (state.user && Number(state.user.id) === Number(updated.id)) ||
+          (session && Number(session.userId) === Number(updated.id))
+        ) {
           state.user = updated;
         }
         if (
           state.viewedProfileUser &&
-          Number(state.viewedProfileUser.id) === Number(updated.id)
+          (!state.viewedProfileUser.id ||
+            Number(state.viewedProfileUser.id) === Number(updated.id))
         ) {
-          state.viewedProfileUser = updated;
+          state.viewedProfileUser =
+            session && Number(session.userId) === Number(updated.id)
+              ? null
+              : updated;
         }
         state.allUsers = state.allUsers.map((u) =>
           Number(u.id) === Number(updated.id) ? updated : u
