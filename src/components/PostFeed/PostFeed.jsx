@@ -275,6 +275,7 @@ const PostFeed = () => {
 
   const handleAskClick = () => {
     if (!user) {
+      dispatch(showNotification('authRequiredToast'));
       dispatch(openAuthModal('login'));
       return;
     }

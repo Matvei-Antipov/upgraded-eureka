@@ -5,6 +5,7 @@ import {
   setCategoryId,
   closePostPage,
   openAskModal,
+  showNotification,
 } from '../../store/postsSlice';
 import { closeProfilePage, openAuthModal } from '../../store/authSlice';
 import { translations } from '../../i18n/translations';
@@ -26,6 +27,7 @@ const Footer = () => {
 
   const handleAsk = () => {
     if (!user) {
+      dispatch(showNotification('authRequiredToast'));
       dispatch(openAuthModal('login'));
       return;
     }

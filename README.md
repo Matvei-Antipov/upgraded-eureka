@@ -39,8 +39,7 @@ Follow these steps from cloning the repository to the first launch of the full-s
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Matvei-Antipov/upgraded-eureka.git
-   cd usof-frontend
+   git clone ssh://git@git.green-lms.app:22022/challenge-665/mantipov-12264.git
    ```
 2. **Install and configure the Backend API (`./api`):**
    ```bash
