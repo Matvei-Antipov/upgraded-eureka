@@ -14,8 +14,14 @@ import './AuthModal.css';
 
 const AuthModal = () => {
   const dispatch = useDispatch();
-  const { isAuthModalOpen, authModalMode, status, error, resetToken, language } =
-    useSelector((state) => state.auth);
+  const {
+    isAuthModalOpen,
+    authModalMode,
+    status,
+    error,
+    resetToken,
+    language,
+  } = useSelector((state) => state.auth);
 
   const t = translations[language] || translations.uk;
 
@@ -55,7 +61,8 @@ const AuthModal = () => {
     e.preventDefault();
     setLocalError('');
 
-    if (!login.trim() || !password) {
+    const cleanIdentifier = login.trim();
+    if (!cleanIdentifier || !password) {
       setLocalError(t.fillAllFieldsError);
       return;
     }
@@ -63,8 +70,10 @@ const AuthModal = () => {
     try {
       await dispatch(
         loginUser({
-          login: login.trim(),
-          email: login.trim(),
+          loginOrEmail: cleanIdentifier,
+          identifier: cleanIdentifier,
+          login: cleanIdentifier,
+          email: cleanIdentifier,
           password,
         })
       ).unwrap();
@@ -105,9 +114,11 @@ const AuthModal = () => {
         registerUser({
           login: login.trim(),
           full_name: fullName.trim() || login.trim(),
+          fullName: fullName.trim() || login.trim(),
           email: email.trim(),
           password,
           password_confirmation: passwordConfirm || password,
+          passwordConfirm: passwordConfirm || password,
         })
       ).unwrap();
 
@@ -133,7 +144,10 @@ const AuthModal = () => {
     }
 
     try {
-      await dispatch(requestPasswordReset(email.trim())).unwrap();
+      const res = await dispatch(requestPasswordReset(email.trim())).unwrap();
+      if (res?.resetToken) {
+        setTokenInput(res.resetToken);
+      }
       dispatch(
         showNotification({
           message: t.resetLinkSentToast,

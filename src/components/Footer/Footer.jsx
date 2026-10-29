@@ -1,93 +1,94 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setCategoryId, setSortBy } from '../../store/postsSlice';
+import {
+  setViewMode,
+  setCategoryId,
+  closePostPage,
+  openAskModal,
+  showNotification,
+} from '../../store/postsSlice';
+import { closeProfilePage, openAuthModal } from '../../store/authSlice';
 import { translations } from '../../i18n/translations';
 import './Footer.css';
 
 const Footer = () => {
   const dispatch = useDispatch();
-  const language = useSelector((state) => state.auth.language);
+  const { language, user } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
 
-  const handleQuickNav = (sortType) => {
+  const handleNav = (mode) => {
+    dispatch(closeProfilePage());
+    dispatch(closePostPage());
     dispatch(setCategoryId(null));
-    dispatch(setSortBy(sortType));
+    dispatch(setViewMode(mode));
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAsk = () => {
+    if (!user) {
+      dispatch(showNotification({ message: t.authRequiredToast }));
+      dispatch(openAuthModal('login'));
+      return;
+    }
+    dispatch(openAskModal(null));
   };
 
   return (
     <footer className="footer">
-      <div className="footer-inner">
-        <div className="footer-top">
+      <div className="footer-container">
+        <div className="footer-brand-col">
           <div className="footer-brand">
-            <a href="/" className="footer-logo">
-              <span className="logo-icon">&lt;/&gt;</span>
-              <span className="logo-text">{t.brand}</span>
-            </a>
-            <p className="footer-description">{t.footerDesc}</p>
+            <span className="footer-logo-box">{'</>'}</span>
+            <span className="footer-brand-title">
+              {t.brandTitle || 'розбір'}
+            </span>
           </div>
-
-          <div className="footer-links-group">
-            <div className="footer-column">
-              <h4 className="footer-heading">{t.footerNav}</h4>
-              <button
-                type="button"
-                className="footer-link-btn"
-                onClick={() => handleQuickNav('date')}
-              >
-                {t.allQuestions}
-              </button>
-              <button
-                type="button"
-                className="footer-link-btn"
-                onClick={() => handleQuickNav('likes')}
-              >
-                {t.popular}
-              </button>
-              <button
-                type="button"
-                className="footer-link-btn"
-                onClick={() => handleQuickNav('date')}
-              >
-                {t.newest}
-              </button>
-            </div>
-
-            <div className="footer-column">
-              <h4 className="footer-heading">{t.footerPlatform}</h4>
-              <a
-                href="#about"
-                className="footer-link"
-                onClick={(e) => e.preventDefault()}
-              >
-                {t.footerAbout}
-              </a>
-              <a
-                href="#rules"
-                className="footer-link"
-                onClick={(e) => e.preventDefault()}
-              >
-                {t.footerRules}
-              </a>
-              <a
-                href="#api"
-                className="footer-link"
-                onClick={(e) => e.preventDefault()}
-              >
-                {t.footerApi}
-              </a>
-            </div>
-          </div>
+          <p className="footer-desc">{t.footerDesc}</p>
         </div>
 
-        <div className="footer-bottom">
-          <span className="footer-copyright">
-            © {new Date().getFullYear()} {t.brand} (USOF). {t.footerRights}
-          </span>
-          <div className="footer-status">
+        <div className="footer-links-col">
+          <h4 className="footer-heading">{t.footerNav}</h4>
+          <ul className="footer-links">
+            <li>
+              <button
+                type="button"
+                className="footer-link-btn"
+                onClick={() => handleNav('all')}
+              >
+                {t.footerAllQuestions}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="footer-link-btn"
+                onClick={() => handleNav('popular')}
+              >
+                {t.footerPopular}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="footer-link-btn"
+                onClick={handleAsk}
+              >
+                {t.footerAsk}
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <div className="footer-status-col">
+          <h4 className="footer-heading">{t.footerSystem}</h4>
+          <div className="footer-status-badge">
             <span className="status-dot" />
             <span>{t.footerApiConnected}</span>
           </div>
+          <p className="footer-copy">
+            © {new Date().getFullYear()} {t.brandTitle || 'розбір'}.{' '}
+            {t.footerRights}
+          </p>
         </div>
       </div>
     </footer>

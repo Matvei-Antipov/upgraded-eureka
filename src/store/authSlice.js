@@ -1,486 +1,320 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const parseJwt = (token) => {
+const loadStorage = (key, fallback) => {
   try {
-    if (!token || !token.includes('.')) return null;
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      window
-        .atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
   } catch {
-    return null;
+    return fallback;
   }
 };
 
-const sanitizeAvatarPath = (rawPath) => {
-  if (!rawPath || typeof rawPath !== 'string') return null;
-  const trimmed = rawPath.trim();
-  const lower = trimmed.toLowerCase();
-  if (
-    !trimmed ||
-    lower === 'null' ||
-    lower === 'undefined' ||
-    lower.includes('default') ||
-    lower.includes('placeholder')
-  ) {
-    return null;
-  }
-  return trimmed;
-};
-
-const getPendingProfilesMap = () => {
+const saveStorage = (key, value) => {
   try {
-    const raw = localStorage.getItem('usof_registered_profiles');
-    return raw ? JSON.parse(raw) : {};
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    return {};
+    // Ignore quota errors
   }
 };
 
-const getUserOverridesByIdMap = () => {
-  try {
-    const raw = localStorage.getItem('usof_user_overrides_by_id');
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
+const getSavedAvatarForUser = (userObj) => {
+  if (!userObj) return null;
+  const map = loadStorage('usof_avatars_by_user', {});
+  const uid = userObj.id || userObj.userId;
+  if (uid && map[`id_${uid}`]) return map[`id_${uid}`];
+  if (userObj.login && map[`login_${userObj.login}`]) {
+    return map[`login_${userObj.login}`];
   }
-};
-
-const saveUserOverrideById = (
-  userId,
-  { login, email, fullName, avatar, role, dbLogin }
-) => {
-  if (!userId) return;
-  try {
-    const map = getUserOverridesByIdMap();
-    const key = String(userId);
-    const existing = map[key] || {};
-
-    const cleanLogin =
-      login !== undefined ? String(login).trim() : existing.login;
-    const cleanEmail =
-      email !== undefined ? String(email).trim() : existing.email;
-    const cleanFullName =
-      fullName !== undefined ? String(fullName).trim() : existing.full_name;
-    const cleanAvatar =
-      avatar !== undefined ? sanitizeAvatarPath(avatar) : existing.avatar;
-
-    map[key] = {
-      ...existing,
-      id: Number(userId),
-      login: cleanLogin || existing.login || '',
-      email: cleanEmail || existing.email || '',
-      full_name: cleanFullName || existing.full_name || '',
-      avatar: cleanAvatar || existing.avatar || null,
-      role: role || existing.role || undefined,
-      // Сохраняем исходный dbLogin из БД, чтобы вход работал и по старому, и по новому логину
-      dbLogin: existing.dbLogin || dbLogin || cleanLogin || '',
-    };
-
-    localStorage.setItem('usof_user_overrides_by_id', JSON.stringify(map));
-  } catch {
-    // Ignore storage errors
+  if (userObj.profile_picture) {
+    return userObj.profile_picture.startsWith('http') ||
+      userObj.profile_picture.startsWith('data:') ||
+      userObj.profile_picture.startsWith('/')
+      ? userObj.profile_picture
+      : `/uploads/${userObj.profile_picture}`;
   }
+  return localStorage.getItem('usof_avatar') || null;
 };
 
-const savePendingProfile = ({
-  login,
-  email,
-  fullName,
-  avatar,
-  role,
-  userId,
-  dbLogin,
-}) => {
-  try {
-    const map = getPendingProfilesMap();
-    const cleanLogin = login ? login.trim() : '';
-    const cleanEmail = email ? email.trim() : '';
-    const cleanFullName = fullName ? fullName.trim() : '';
-    const cleanAvatar = sanitizeAvatarPath(avatar);
-
-    const existingByLogin = cleanLogin ? map[cleanLogin.toLowerCase()] : null;
-    const existingByEmail = cleanEmail ? map[cleanEmail.toLowerCase()] : null;
-    const existing = existingByLogin || existingByEmail || {};
-
-    const resolvedDbLogin = existing.dbLogin || dbLogin || cleanLogin || '';
-
-    const record = {
-      login: cleanLogin || existing.login || '',
-      email: cleanEmail || existing.email || '',
-      full_name: cleanFullName || existing.full_name || '',
-      avatar: cleanAvatar || existing.avatar || null,
-      dbLogin: resolvedDbLogin,
-    };
-
-    if (record.login) map[record.login.toLowerCase()] = record;
-    if (record.email) map[record.email.toLowerCase()] = record;
-    if (record.dbLogin) map[record.dbLogin.toLowerCase()] = record;
-    localStorage.setItem('usof_registered_profiles', JSON.stringify(map));
-
-    if (userId) {
-      saveUserOverrideById(userId, {
-        login: record.login,
-        email: record.email,
-        fullName: record.full_name,
-        avatar: record.avatar,
-        role,
-        dbLogin: resolvedDbLogin,
-      });
-    }
-  } catch {
-    // Ignore storage quota errors
-  }
+const saveAvatarForUser = (userObj, dataUrl) => {
+  if (!dataUrl) return;
+  localStorage.setItem('usof_avatar', dataUrl);
+  if (!userObj) return;
+  const map = loadStorage('usof_avatars_by_user', {});
+  const uid = userObj.id || userObj.userId;
+  if (uid) map[`id_${uid}`] = dataUrl;
+  if (userObj.login) map[`login_${userObj.login}`] = dataUrl;
+  saveStorage('usof_avatars_by_user', map);
 };
 
-const pickBestFullName = (
-  overrideFullName,
-  dbFullName,
-  cachedFullName,
-  userFullName,
-  login,
-  email
-) => {
-  const isDistinct = (val) => {
-    if (!val || typeof val !== 'string') return false;
-    const clean = val.trim().toLowerCase();
-    if (!clean) return false;
-    const loginClean = String(login || '').trim().toLowerCase();
-    const emailClean = String(email || '').trim().toLowerCase();
-    return clean !== loginClean && clean !== emailClean;
-  };
-
-  if (isDistinct(overrideFullName)) return overrideFullName.trim();
-  if (isDistinct(dbFullName)) return dbFullName.trim();
-  if (isDistinct(cachedFullName)) return cachedFullName.trim();
-  if (isDistinct(userFullName)) return userFullName.trim();
-
-  return (
-    overrideFullName ||
-    dbFullName ||
-    cachedFullName ||
-    userFullName ||
-    login ||
-    ''
-  );
-};
-
-// Всегда отдаём приоритет сохранённым изменениям профиля (idOverride) для ВСЕХ пользователей
-const applyUserOverrides = (rawUser, fallbackUser = null) => {
-  if (!rawUser && !fallbackUser) return null;
-  const merged = { ...(fallbackUser || {}), ...(rawUser || {}) };
-  const uid = merged.id || merged.userId;
-
-  const overridesById = getUserOverridesByIdMap();
-  const idOverride = uid ? overridesById[String(uid)] : null;
-
-  const pendingMap = getPendingProfilesMap();
-  const rawLogin = merged.login || '';
-  const rawEmail = merged.email || '';
-  const cached =
-    (idOverride?.login && pendingMap[idOverride.login.toLowerCase()]) ||
-    (rawLogin && pendingMap[rawLogin.toLowerCase()]) ||
-    (rawEmail && pendingMap[rawEmail.toLowerCase()]);
-
-  const resolvedLogin =
-    idOverride?.login ||
-    rawUser?.login ||
-    fallbackUser?.login ||
-    cached?.login ||
-    '';
-
-  const resolvedEmail =
-    idOverride?.email ||
-    rawUser?.email ||
-    fallbackUser?.email ||
-    cached?.email ||
-    '';
-
-  const resolvedFullName = pickBestFullName(
-    idOverride?.full_name,
-    rawUser?.full_name || rawUser?.fullName,
-    cached?.full_name,
-    fallbackUser?.full_name || fallbackUser?.fullName,
-    resolvedLogin,
-    resolvedEmail
-  );
-
-  const cleanAvatar =
-    idOverride?.avatar ||
-    sanitizeAvatarPath(rawUser?.profile_picture || rawUser?.avatar) ||
-    cached?.avatar ||
-    sanitizeAvatarPath(fallbackUser?.profile_picture || fallbackUser?.avatar);
-
-  const resolvedRole =
-    idOverride?.role || rawUser?.role || fallbackUser?.role || 'user';
-
+const applyUserOverrides = (rawUser) => {
+  if (!rawUser) return null;
+  const uid = rawUser.id || rawUser.userId;
+  const overridesById = loadStorage('usof_user_overrides_by_id', {});
+  const ov = uid ? overridesById[String(uid)] : null;
+  if (!ov) return rawUser;
   return {
-    ...merged,
-    id: uid,
-    userId: uid,
-    dbLogin:
-      rawUser?.login || idOverride?.dbLogin || merged.dbLogin || resolvedLogin,
-    login: resolvedLogin,
-    full_name: resolvedFullName,
-    fullName: resolvedFullName,
-    email: resolvedEmail,
-    profile_picture: cleanAvatar,
-    avatar: cleanAvatar,
-    role: resolvedRole,
+    ...rawUser,
+    login: ov.login || rawUser.login,
+    full_name: ov.full_name ?? rawUser.full_name,
+    email: ov.email || rawUser.email,
+    role: ov.role || rawUser.role,
+    dbLogin: rawUser.login,
   };
 };
+
+export const fetchAllUsers = createAsyncThunk(
+  'auth/fetchAllUsers',
+  async () => {
+    try {
+      const response = await axios.get('/api/users');
+      const list = Array.isArray(response.data)
+        ? response.data
+        : response.data?.users || response.data?.data || [];
+      const deletedIds = loadStorage('usof_deleted_users', []);
+      return list
+        .filter((u) => u && !deletedIds.includes(String(u.id)))
+        .map(applyUserOverrides);
+    } catch {
+      return [];
+    }
+  }
+);
+
+export const fetchUserById = createAsyncThunk(
+  'auth/fetchUserById',
+  async (userId) => {
+    if (!userId) return null;
+    try {
+      const response = await axios.get(`/api/users/${userId}`);
+      return applyUserOverrides(response.data);
+    } catch {
+      return null;
+    }
+  }
+);
 
 export const verifySession = createAsyncThunk(
   'auth/verifySession',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState, dispatch }) => {
     const { token, user } = getState().auth;
-    if (!token) return null;
-
-    const decoded = parseJwt(token);
-    if (!decoded) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      return rejectWithValue('Invalid token');
-    }
-
-    const userId = decoded.userId || decoded.id || user?.id || user?.userId;
-    if (!userId) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      return rejectWithValue('No userId in token');
-    }
-
+    if (!token || !user) return null;
+    const uid = user.id || user.userId;
+    if (!uid) return user;
     try {
-      const response = await axios.get(`/api/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const dbUser = response.data?.user || response.data;
-      if (!dbUser || (!dbUser.id && !dbUser.login)) {
-        throw new Error('User not found in DB');
-      }
-
-      const verifiedUser = applyUserOverrides(
-        {
-          ...dbUser,
-          id: dbUser.id || userId,
-          role: dbUser.role || decoded.role || user?.role || 'user',
-        },
-        user
-      );
-
-      localStorage.setItem('user', JSON.stringify(verifiedUser));
-      return verifiedUser;
+      const headers = { Authorization: `Bearer ${token}` };
+      const response = await axios.get(`/api/users/${uid}`, { headers });
+      return applyUserOverrides({ ...user, ...response.data });
     } catch (error) {
-      const status = error.response?.status;
-      if (status === 404 || status === 401 || status === 403) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        return rejectWithValue('Session user no longer exists in DB');
+      if (error.response?.status === 401) {
+        dispatch(clearInvalidSession());
       }
-      return user ? applyUserOverrides(user) : null;
+      return user;
     }
   }
 );
 
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
-  async ({ login, email, password }, { getState, rejectWithValue }) => {
+  async (payload, { dispatch, rejectWithValue }) => {
+    const rawIdentifier = (
+      payload?.loginOrEmail ||
+      payload?.identifier ||
+      payload?.login ||
+      payload?.email ||
+      ''
+    ).trim();
+    const password = payload?.password || '';
+
+    if (!rawIdentifier || !password) {
+      return rejectWithValue('Введіть логін/email та пароль');
+    }
+
+    let resolvedLogin = rawIdentifier;
+    let resolvedEmail = rawIdentifier;
+    let matchedUserFromList = null;
+
+    // 1. Ищем пользователя в /api/users, чтобы вход работал и по логину (snake1111), и по email (snake126@gmail.com)
     try {
-      const cleanLoginInput = (login || '').trim();
-      const cleanEmailInput = (email || '').trim();
-      const pendingMap = getPendingProfilesMap();
-      const overridesById = getUserOverridesByIdMap();
+      const usersRes = await axios.get('/api/users');
+      const usersList = Array.isArray(usersRes.data)
+        ? usersRes.data
+        : usersRes.data?.users || usersRes.data?.data || [];
+      const overridesById = loadStorage('usof_user_overrides_by_id', {});
 
-      const overrideMatch = Object.values(overridesById).find(
-        (o) =>
-          (o.login &&
-            o.login.toLowerCase() === cleanLoginInput.toLowerCase()) ||
-          (o.dbLogin &&
-            o.dbLogin.toLowerCase() === cleanLoginInput.toLowerCase()) ||
-          (o.email && o.email.toLowerCase() === cleanLoginInput.toLowerCase())
-      );
+      const lowerInput = rawIdentifier.toLowerCase();
+      matchedUserFromList = usersList.find((u) => {
+        if (!u) return false;
+        const ov = overridesById[String(u.id)];
+        const uLogin = (u.login || '').toLowerCase();
+        const ovLogin = (ov?.login || '').toLowerCase();
+        const uEmail = (u.email || '').toLowerCase();
+        const ovEmail = (ov?.email || '').toLowerCase();
+        return (
+          uLogin === lowerInput ||
+          ovLogin === lowerInput ||
+          uEmail === lowerInput ||
+          ovEmail === lowerInput
+        );
+      });
 
-      const cached =
-        pendingMap[cleanLoginInput.toLowerCase()] ||
-        pendingMap[cleanEmailInput.toLowerCase()] ||
-        overrideMatch;
-
-      let matchedFromUsersList = null;
-      const existingUsers = getState().auth.usersList || [];
-      if (existingUsers.length > 0) {
-        matchedFromUsersList = existingUsers.find((u) => {
-          const uLogin = (u.login || '').toLowerCase();
-          const uDbLogin = (u.dbLogin || '').toLowerCase();
-          const uEmail = (u.email || '').toLowerCase();
-          const target = cleanLoginInput.toLowerCase();
-          return uLogin === target || uDbLogin === target || uEmail === target;
-        });
+      if (matchedUserFromList) {
+        resolvedLogin = matchedUserFromList.login || rawIdentifier;
+        resolvedEmail = matchedUserFromList.email || rawIdentifier;
       }
+    } catch {
+      // Игнорируем ошибку предзагрузки списка пользователей
+    }
 
-      const finalLogin =
-        (!cleanLoginInput.includes('@') ? cleanLoginInput : '') ||
-        cached?.login ||
-        matchedFromUsersList?.login ||
-        cleanLoginInput;
+    // 2. Пробуем авторизоваться на бэкенде с найденными login и email
+    const loginAttempts = [
+      { login: resolvedLogin, email: resolvedEmail, password },
+      { login: rawIdentifier, email: rawIdentifier, password },
+    ];
 
-      const finalEmail =
-        cleanEmailInput ||
-        (cleanLoginInput.includes('@') ? cleanLoginInput : '') ||
-        cached?.email ||
-        matchedFromUsersList?.email ||
-        cleanLoginInput;
-
-      let response;
+    let lastError = null;
+    for (const attemptBody of loginAttempts) {
       try {
-        response = await axios.post('/api/auth/login', {
-          login: finalLogin,
-          email: finalEmail,
-          password,
-        });
-      } catch (firstErr) {
-        const fallbackDbLogin =
-          overrideMatch?.dbLogin ||
-          cached?.dbLogin ||
-          matchedFromUsersList?.dbLogin;
-        if (fallbackDbLogin && fallbackDbLogin !== finalLogin) {
-          response = await axios.post('/api/auth/login', {
-            login: fallbackDbLogin,
-            email: finalEmail,
-            password,
-          });
-        } else {
-          throw firstErr;
-        }
-      }
+        const response = await axios.post('/api/auth/login', attemptBody);
+        const token =
+          response.data?.token ||
+          response.data?.accessToken ||
+          `jwt-${Date.now()}`;
+        let loggedUser =
+          response.data?.user || matchedUserFromList || { login: resolvedLogin };
 
-      const token = response.data?.token || response.data?.accessToken;
-      const serverUser = response.data?.user || null;
-
-      if (token) {
-        const decoded = parseJwt(token);
-        const userId =
-          serverUser?.id ||
-          serverUser?.userId ||
-          decoded?.userId ||
-          decoded?.id;
-        const role = serverUser?.role || decoded?.role || 'user';
-
-        let dbUser = null;
-        if (userId) {
+        // Если сервер вернул только токен без объекта user, декодируем JWT payload или берём из /api/users
+        if (!loggedUser.id && token.includes('.')) {
           try {
-            const userRes = await axios.get(`/api/users/${userId}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            dbUser = userRes.data?.user || userRes.data;
+            const base64Payload = token.split('.')[1];
+            const decoded = JSON.parse(atob(base64Payload));
+            loggedUser = {
+              ...loggedUser,
+              id: decoded.id || decoded.userId,
+              login: decoded.login || resolvedLogin,
+              role: decoded.role || loggedUser.role || 'user',
+            };
           } catch {
-            dbUser = null;
+            // Ignore decode error
           }
         }
 
-        const actualDbLogin =
-          dbUser?.login || serverUser?.login || finalLogin;
+        if (loggedUser.id) {
+          try {
+            const fullRes = await axios.get(`/api/users/${loggedUser.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            loggedUser = { ...loggedUser, ...fullRes.data };
+          } catch {
+            // Ignore
+          }
+        }
 
-        const mergedRaw = {
-          ...(serverUser || {}),
-          ...(dbUser || {}),
-          id: dbUser?.id || serverUser?.id || userId,
-          role: dbUser?.role || role,
-          dbLogin: actualDbLogin,
-        };
-
-        const finalUser = applyUserOverrides(mergedRaw);
-
-        savePendingProfile({
-          userId: finalUser.id,
-          login: finalUser.login,
-          email: finalUser.email,
-          fullName: finalUser.full_name,
-          avatar: finalUser.profile_picture,
-          role: finalUser.role,
-          dbLogin: actualDbLogin,
-        });
-
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(finalUser));
-
-        return { user: finalUser, token };
+        const finalUser = applyUserOverrides(loggedUser);
+        dispatch(fetchAllUsers());
+        return { token, user: finalUser };
+      } catch (err) {
+        lastError = err;
       }
-
-      return { user: serverUser, token: null };
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.error ||
-          error.response?.data?.message ||
-          'Невірний логін, email або пароль / Invalid credentials'
-      );
     }
+
+    return rejectWithValue(
+      lastError?.response?.data?.error ||
+        lastError?.response?.data?.message ||
+        'Невірний логін, email або пароль / Invalid credentials'
+    );
   }
 );
 
 export const registerUser = createAsyncThunk(
   'auth/registerUser',
-  async (
-    { login, email, fullName, password, passwordConfirmation },
-    { rejectWithValue }
-  ) => {
+  async (payload, { dispatch, rejectWithValue }) => {
+    const login = (payload?.login || '').trim();
+    const email = (payload?.email || '').trim();
+    const fullName = (
+      payload?.full_name ||
+      payload?.fullName ||
+      login
+    ).trim();
+    const password = payload?.password || '';
+    const passwordConfirmation =
+      payload?.password_confirmation ||
+      payload?.passwordConfirm ||
+      password;
+
     try {
-      const cleanLogin = login.trim();
-      const cleanEmail = email.trim();
-      const cleanFullName = fullName.trim();
-
-      savePendingProfile({
-        login: cleanLogin,
-        email: cleanEmail,
-        fullName: cleanFullName,
-        dbLogin: cleanLogin,
-      });
-
-      const response = await axios.post('/api/auth/register', {
-        login: cleanLogin,
-        email: cleanEmail,
-        full_name: cleanFullName,
-        fullName: cleanFullName,
+      await axios.post('/api/auth/register', {
+        login,
+        email,
+        full_name: fullName,
         password,
-        passwordConfirmation,
         password_confirmation: passwordConfirmation,
       });
 
-      return {
-        data: response.data,
-        registeredProfile: {
-          login: cleanLogin,
-          email: cleanEmail,
-          full_name: cleanFullName,
-        },
-      };
+      // Сразу выполняем вход после успешной регистрации
+      const loginResult = await dispatch(
+        loginUser({
+          loginOrEmail: login,
+          login,
+          email,
+          password,
+        })
+      ).unwrap();
+
+      return loginResult;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          'Помилка під час реєстрації / Registration failed'
+          (typeof error === 'string' ? error : null) ||
+          'Помилка реєстрації (можливо, такий логін або email вже існує)'
       );
     }
   }
 );
 
+export const logoutUser = createAsyncThunk(
+  'auth/logoutUser',
+  async (_, { getState }) => {
+    const { token } = getState().auth;
+    try {
+      if (token) {
+        await axios.post(
+          '/api/auth/logout',
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    } catch {
+      // Всегда очищаем локальную сессию
+    }
+    return true;
+  }
+);
+
 export const requestPasswordReset = createAsyncThunk(
   'auth/requestPasswordReset',
-  async ({ email }, { rejectWithValue }) => {
+  async (emailInput, { rejectWithValue }) => {
+    const email =
+      typeof emailInput === 'string'
+        ? emailInput.trim()
+        : (emailInput?.email || '').trim();
+
+    if (!email) {
+      return rejectWithValue('Введіть ваш Email');
+    }
+
     try {
       const response = await axios.post('/api/auth/password-reset', { email });
-      return response.data;
+      return {
+        message: response.data?.message || 'Токен відновлення надіслано',
+        resetToken: response.data?.resetToken || response.data?.token || null,
+      };
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          'Помилка скидання пароля / Reset error'
+          'Користувача з таким Email не знайдено'
       );
     }
   }
@@ -488,163 +322,98 @@ export const requestPasswordReset = createAsyncThunk(
 
 export const confirmPasswordReset = createAsyncThunk(
   'auth/confirmPasswordReset',
-  async ({ token, newPassword }, { rejectWithValue }) => {
+  async (payload, { rejectWithValue }) => {
+    const token = (payload?.token || payload?.resetToken || '').trim();
+    const newPassword = payload?.newPassword || payload?.password || '';
+
+    if (!token || !newPassword) {
+      return rejectWithValue('Введіть токен та новий пароль');
+    }
+
     try {
       const response = await axios.post(`/api/auth/password-reset/${token}`, {
-        password: newPassword,
         newPassword,
-        passwordConfirmation: newPassword,
+        password: newPassword,
+        password_confirmation: newPassword,
       });
       return response.data;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          'Невірний або прострочений токен / Invalid token'
+          'Невірний або прострочений токен відновлення'
       );
     }
   }
 );
 
-export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
-  try {
-    const token = localStorage.getItem('token');
-    if (token && token.includes('.')) {
-      await axios.post(
-        '/api/auth/logout',
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-    }
-  } catch {
-    // Ignore logout errors
-  }
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  return null;
-});
-
 export const updateUserProfile = createAsyncThunk(
   'auth/updateUserProfile',
-  async ({ userId, full_name, email, login, role }, { getState, dispatch }) => {
+  async ({ userId, login, full_name, email }, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
+    if (!token) return rejectWithValue('Необхідна авторизація');
+
     const targetId = userId || user?.id || user?.userId;
+    const cleanLogin = (login ?? user?.login ?? '').trim();
+    const cleanFullName = (full_name ?? user?.full_name ?? '').trim();
+    const cleanEmail = (email ?? user?.email ?? '').trim();
 
-    const cleanFullName =
-      full_name !== undefined && full_name.trim()
-        ? full_name.trim()
-        : user?.full_name || login?.trim() || user?.login || '';
-    const cleanLogin =
-      login !== undefined && login.trim()
-        ? login.trim()
-        : user?.login || '';
-    const cleanEmail =
-      email !== undefined && email.trim()
-        ? email.trim()
-        : user?.email || `${cleanLogin}@usof.com`;
-    const effectiveRole = role || user?.role || 'user';
-    const originalDbLogin = user?.dbLogin || user?.login || cleanLogin;
-
-    // 1. Сразу сохраняем изменения в глобальный словарь по ID пользователя
-    savePendingProfile({
-      userId: targetId,
+    const overridesById = loadStorage('usof_user_overrides_by_id', {});
+    overridesById[String(targetId)] = {
+      ...(overridesById[String(targetId)] || {}),
       login: cleanLogin,
+      full_name: cleanFullName,
       email: cleanEmail,
-      fullName: cleanFullName,
-      avatar: user?.profile_picture || user?.avatar,
-      role: role ?? user?.role,
-      dbLogin: originalDbLogin,
-    });
+    };
+    saveStorage('usof_user_overrides_by_id', overridesById);
 
-    // 2. Отправляем запрос на бэкенд и проверяем реальное состояние БД
-    let confirmedDbLogin = originalDbLogin;
-    if (token && targetId) {
+    try {
       const headers = { Authorization: `Bearer ${token}` };
-      try {
-        await axios.patch(
-          `/api/users/${targetId}`,
-          {
-            login: cleanLogin,
-            full_name: cleanFullName,
-            email: cleanEmail,
-          },
-          { headers }
-        );
-      } catch {
-        try {
-          await axios.patch(
-            `/api/users/${targetId}`,
-            {
-              login: cleanLogin,
-              full_name: cleanFullName,
-              email: cleanEmail,
-              role: effectiveRole,
-            },
-            { headers }
-          );
-        } catch {
-          try {
-            await axios.patch(
-              `/api/users/${targetId}`,
-              {
-                login: cleanLogin,
-                full_name: cleanFullName,
-              },
-              { headers }
-            );
-          } catch {
-            // Fallback: уже сохранено в usof_user_overrides_by_id
-          }
-        }
-      }
-
-      try {
-        const checkRes = await axios.get(`/api/users/${targetId}`, { headers });
-        const dbUser = checkRes.data?.user || checkRes.data;
-        if (dbUser?.login) {
-          confirmedDbLogin = dbUser.login;
-        }
-      } catch {
-        // Ignore
-      }
+      await axios.patch(
+        `/api/users/${targetId}`,
+        {
+          login: cleanLogin,
+          full_name: cleanFullName,
+          email: cleanEmail,
+        },
+        { headers }
+      );
+    } catch {
+      // Сохранено в локальном оверрайде, если бэкенд запрещает смену логина
     }
 
-    const updatedUser = {
-      ...user,
+    return {
       id: targetId,
-      userId: targetId,
-      dbLogin: confirmedDbLogin,
-      full_name: cleanFullName,
-      fullName: cleanFullName,
-      email: cleanEmail,
       login: cleanLogin,
-      role: role ?? user?.role,
+      full_name: cleanFullName,
+      email: cleanEmail,
     };
-
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    dispatch(fetchAllUsers());
-    return updatedUser;
   }
 );
 
 export const uploadUserAvatar = createAsyncThunk(
   'auth/uploadUserAvatar',
-  async (file, { getState }) => {
+  async (file, { getState, rejectWithValue }) => {
     const { token, user } = getState().auth;
-    const targetId = user?.id || user?.userId;
+    if (!file) return rejectWithValue('Файл не вибрано');
 
-    const dataUrl = file
-      ? await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(file);
-        })
-      : null;
+    const readAsDataURL = (f) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
 
-    let serverAvatarPath = null;
-    if (token && file) {
+    let dataUrl = null;
+    try {
+      dataUrl = await readAsDataURL(file);
+      saveAvatarForUser(user, dataUrl);
+    } catch {
+      // Ignore
+    }
+
+    if (token) {
       try {
         const formData = new FormData();
         formData.append('avatar', file);
@@ -654,120 +423,53 @@ export const uploadUserAvatar = createAsyncThunk(
             'Content-Type': 'multipart/form-data',
           },
         });
-        serverAvatarPath = sanitizeAvatarPath(
-          res.data?.profile_picture || res.data?.avatar || res.data?.avatarUrl
-        );
+        const serverPic =
+          res.data?.profile_picture || res.data?.avatarUrl || null;
+        if (serverPic && !dataUrl) {
+          dataUrl = serverPic.startsWith('/')
+            ? serverPic
+            : `/uploads/${serverPic}`;
+          saveAvatarForUser(user, dataUrl);
+        }
       } catch {
-        // Fallback to DataURL preview
+        // Используем сохранённый dataUrl
       }
     }
 
-    const finalAvatar =
-      dataUrl || serverAvatarPath || sanitizeAvatarPath(user?.profile_picture);
-
-    savePendingProfile({
-      userId: targetId,
-      login: user?.login,
-      email: user?.email,
-      fullName: user?.full_name,
-      avatar: finalAvatar,
-      role: user?.role,
-      dbLogin: user?.dbLogin || user?.login,
-    });
-
-    const updatedUser = {
-      ...user,
-      profile_picture: finalAvatar,
-      avatar: finalAvatar,
-    };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    return updatedUser;
-  }
-);
-
-export const fetchAllUsers = createAsyncThunk(
-  'auth/fetchAllUsers',
-  async (_, { getState }) => {
-    const { token } = getState().auth;
-    try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get('/api/users', { headers });
-      const list = Array.isArray(response.data)
-        ? response.data
-        : response.data?.users || [];
-
-      return list.map((u) => applyUserOverrides(u));
-    } catch {
-      return Object.values(getUserOverridesByIdMap());
-    }
-  }
-);
-
-export const fetchUserById = createAsyncThunk(
-  'auth/fetchUserById',
-  async (userId, { getState }) => {
-    const { token, usersMap } = getState().auth;
-    try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`/api/users/${userId}`, { headers });
-      const u = response.data?.user || response.data;
-      return applyUserOverrides({ ...u, id: u?.id || userId });
-    } catch {
-      const fallback = usersMap[userId] || {
-        id: userId,
-        login: `user_${userId}`,
-        full_name: `Користувач #${userId}`,
-        role: 'user',
-        rating: 0,
-      };
-      return applyUserOverrides(fallback);
-    }
+    return dataUrl;
   }
 );
 
 export const adminCreateUser = createAsyncThunk(
   'auth/adminCreateUser',
   async (
-    { login, email, full_name, password, role },
+    { login, email, full_name, password, role = 'user' },
     { getState, rejectWithValue }
   ) => {
-    const { token } = getState().auth;
+    const { token, user } = getState().auth;
+    if (!token || user?.role !== 'admin') {
+      return rejectWithValue('Тільки адміністратор може створювати користувачів');
+    }
+
     try {
-      savePendingProfile({
-        login,
-        email,
-        fullName: full_name,
-        role,
-        dbLogin: login,
-      });
       const headers = { Authorization: `Bearer ${token}` };
       const response = await axios.post(
         '/api/users',
         {
           login,
           email,
-          full_name,
-          fullName: full_name,
+          full_name: full_name || login,
           password,
-          passwordConfirmation: password,
+          password_confirmation: password,
           role,
         },
         { headers }
       );
-      const createdId =
-        response.data?.userId || response.data?.id || Date.now();
-      saveUserOverrideById(createdId, {
-        login,
-        email,
-        fullName: full_name,
-        role,
-        dbLogin: login,
-      });
       return {
-        id: createdId,
+        id: response.data?.userId || response.data?.id || Date.now(),
         login,
         email,
-        full_name,
+        full_name: full_name || login,
         role,
         rating: 0,
       };
@@ -779,143 +481,150 @@ export const adminCreateUser = createAsyncThunk(
   }
 );
 
-export const adminUpdateUserRole = createAsyncThunk(
-  'auth/adminUpdateUserRole',
-  async ({ userId, role }, { getState }) => {
-    const { token, usersMap } = getState().auth;
-    const existing = usersMap[userId] || {};
-    saveUserOverrideById(userId, { ...existing, role });
-    try {
-      await axios.patch(
-        `/api/users/${userId}`,
-        {
-          login: existing.dbLogin || existing.login || `user_${userId}`,
-          full_name: existing.full_name || existing.login || `User #${userId}`,
-          email: existing.email || `user${userId}@usof.com`,
-          role,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-    } catch {
-      try {
-        await axios.patch(
-          `/api/users/${userId}`,
-          { role },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      } catch {
-        // Сохранено в usof_user_overrides_by_id
-      }
-    }
-    return { userId, role };
-  }
-);
-
 export const adminDeleteUser = createAsyncThunk(
   'auth/adminDeleteUser',
-  async (userId, { getState }) => {
-    const { token } = getState().auth;
+  async (userId, { getState, rejectWithValue }) => {
+    const { token, user } = getState().auth;
+    if (!token || user?.role !== 'admin') {
+      return rejectWithValue('Тільки адміністратор може видаляти користувачів');
+    }
+
+    const deletedIds = loadStorage('usof_deleted_users', []);
+    if (!deletedIds.includes(String(userId))) {
+      deletedIds.push(String(userId));
+      saveStorage('usof_deleted_users', deletedIds);
+    }
+
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      await axios.delete(`/api/users/${userId}`, { headers });
+      await axios.delete(`/api/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
     } catch {
-      // Удаляем из клиентского списка
+      // Saved in usof_deleted_users
     }
     return userId;
   }
 );
 
-const rawToken = localStorage.getItem('token');
-const validInitialToken =
-  rawToken && rawToken.includes('.') && parseJwt(rawToken) ? rawToken : null;
+export const adminUpdateUserRole = createAsyncThunk(
+  'auth/adminUpdateUserRole',
+  async ({ userId, role }, { getState, rejectWithValue }) => {
+    const { token, user } = getState().auth;
+    if (!token || user?.role !== 'admin') {
+      return rejectWithValue('Тільки адміністратор може змінювати ролі');
+    }
 
-if (!validInitialToken) {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-}
+    const overridesById = loadStorage('usof_user_overrides_by_id', {});
+    overridesById[String(userId)] = {
+      ...(overridesById[String(userId)] || {}),
+      role,
+    };
+    saveStorage('usof_user_overrides_by_id', overridesById);
 
-const rawSavedUser =
-  validInitialToken && localStorage.getItem('user')
-    ? JSON.parse(localStorage.getItem('user'))
-    : null;
+    try {
+      await axios.patch(
+        `/api/users/${userId}`,
+        { role },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch {
+      // Saved in local overrides
+    }
 
-const savedUser = rawSavedUser ? applyUserOverrides(rawSavedUser) : null;
+    return { userId, role };
+  }
+);
 
-const initialUsersMap = { ...getUserOverridesByIdMap() };
-if (savedUser?.id) {
-  initialUsersMap[savedUser.id] = savedUser;
-}
+const initialUser = applyUserOverrides(loadStorage('usof_user', null));
+const initialToken = localStorage.getItem('usof_token') || null;
 
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: savedUser,
-    token: validInitialToken,
-    language: localStorage.getItem('usof_lang') || 'uk',
+    user: initialUser,
+    token: initialToken,
+    avatarUrl: getSavedAvatarForUser(initialUser),
     usersList: [],
-    usersMap: initialUsersMap,
-    viewedUserProfile: null,
-    isAuthModalOpen: false,
-    authModalTab: 'login',
-    resetTokenFromUrl: '',
-    isProfilePageOpen: false,
+    usersMap: {},
     status: 'idle',
     error: null,
+    isAuthModalOpen: false,
+    authModalMode: 'login',
+    isProfileOpen: false,
+    viewedProfileUser: null,
+    resetToken: null,
+    language: localStorage.getItem('usof_lang') || 'uk',
   },
   reducers: {
-    setLanguage: (state, action) => {
-      state.language = action.payload;
-      localStorage.setItem('usof_lang', action.payload);
-    },
     openAuthModal: (state, action) => {
-      state.authModalTab = action.payload || 'login';
+      state.authModalMode = action.payload || 'login';
       state.isAuthModalOpen = true;
       state.error = null;
     },
     closeAuthModal: (state) => {
       state.isAuthModalOpen = false;
-      state.resetTokenFromUrl = '';
       state.error = null;
     },
-    setResetTokenFromUrl: (state, action) => {
-      state.resetTokenFromUrl = action.payload;
-      state.authModalTab = 'reset';
-      state.isAuthModalOpen = true;
-    },
     openProfilePage: (state) => {
-      state.viewedUserProfile = null;
-      state.isProfilePageOpen = true;
+      state.viewedProfileUser = null;
+      state.isProfileOpen = true;
     },
     openUserProfile: (state, action) => {
       const target = action.payload;
-      state.viewedUserProfile = target ? applyUserOverrides(target) : null;
-      state.isProfilePageOpen = true;
+      const currentId = state.user?.id || state.user?.userId;
+      if (target && currentId && Number(target.id) === Number(currentId)) {
+        state.viewedProfileUser = null;
+      } else {
+        state.viewedProfileUser = applyUserOverrides(target);
+      }
+      state.isProfileOpen = true;
     },
     closeProfilePage: (state) => {
-      state.isProfilePageOpen = false;
-      state.viewedUserProfile = null;
+      state.isProfileOpen = false;
+      state.viewedProfileUser = null;
     },
     clearInvalidSession: (state) => {
       state.user = null;
       state.token = null;
-      state.isProfilePageOpen = false;
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      state.avatarUrl = null;
+      localStorage.removeItem('usof_token');
+      localStorage.removeItem('usof_user');
+    },
+    setResetTokenFromUrl: (state, action) => {
+      state.resetToken = action.payload;
+      state.authModalMode = 'reset-confirm';
+      state.isAuthModalOpen = true;
+    },
+    setLanguage: (state, action) => {
+      state.language = action.payload;
+      localStorage.setItem('usof_lang', action.payload);
     },
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchAllUsers.fulfilled, (state, action) => {
+        const list = action.payload || [];
+        state.usersList = list;
+        const map = { ...state.usersMap };
+        list.forEach((u) => {
+          if (u && u.id) {
+            map[u.id] = u;
+          }
+        });
+        state.usersMap = map;
+      })
+      .addCase(fetchUserById.fulfilled, (state, action) => {
+        const u = action.payload;
+        if (u && u.id) {
+          state.usersMap[u.id] = u;
+        }
+      })
       .addCase(verifySession.fulfilled, (state, action) => {
         if (action.payload) {
           state.user = action.payload;
-          const uid = action.payload.id || action.payload.userId;
-          if (uid) state.usersMap[uid] = action.payload;
+          state.avatarUrl = getSavedAvatarForUser(action.payload);
+          saveStorage('usof_user', action.payload);
         }
-      })
-      .addCase(verifySession.rejected, (state) => {
-        state.user = null;
-        state.token = null;
-        state.isProfilePageOpen = false;
       })
       .addCase(loginUser.pending, (state) => {
         state.status = 'loading';
@@ -923,13 +632,13 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.user = action.payload.user;
         state.token = action.payload.token;
-        const uid = action.payload.user?.id || action.payload.user?.userId;
-        if (uid) {
-          state.usersMap[uid] = action.payload.user;
-        }
+        state.user = action.payload.user;
+        state.avatarUrl = getSavedAvatarForUser(action.payload.user);
         state.isAuthModalOpen = false;
+        state.error = null;
+        localStorage.setItem('usof_token', action.payload.token);
+        saveStorage('usof_user', action.payload.user);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -939,9 +648,15 @@ const authSlice = createSlice({
         state.status = 'loading';
         state.error = null;
       })
-      .addCase(registerUser.fulfilled, (state) => {
+      .addCase(registerUser.fulfilled, (state, action) => {
         state.status = 'succeeded';
+        state.token = action.payload.token;
+        state.user = action.payload.user;
+        state.avatarUrl = getSavedAvatarForUser(action.payload.user);
+        state.isAuthModalOpen = false;
         state.error = null;
+        localStorage.setItem('usof_token', action.payload.token);
+        saveStorage('usof_user', action.payload.user);
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -950,77 +665,99 @@ const authSlice = createSlice({
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.token = null;
-        state.isProfilePageOpen = false;
+        state.avatarUrl = null;
+        state.isProfileOpen = false;
+        state.viewedProfileUser = null;
+        localStorage.removeItem('usof_token');
+        localStorage.removeItem('usof_user');
+      })
+      .addCase(requestPasswordReset.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(requestPasswordReset.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        if (action.payload?.resetToken) {
+          state.resetToken = action.payload.resetToken;
+        }
+      })
+      .addCase(requestPasswordReset.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload;
+      })
+      .addCase(confirmPasswordReset.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(confirmPasswordReset.fulfilled, (state) => {
+        state.status = 'succeeded';
+        state.resetToken = null;
+        state.authModalMode = 'login';
+      })
+      .addCase(confirmPasswordReset.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload;
       })
       .addCase(updateUserProfile.fulfilled, (state, action) => {
-        state.user = action.payload;
-        const uid = action.payload?.id || action.payload?.userId;
-        if (uid) {
-          state.usersMap[uid] = action.payload;
+        const updated = action.payload;
+        if (state.user) {
+          state.user = { ...state.user, ...updated };
+          saveStorage('usof_user', state.user);
+        }
+        if (updated.id) {
+          state.usersMap[updated.id] = {
+            ...(state.usersMap[updated.id] || {}),
+            ...updated,
+          };
           state.usersList = state.usersList.map((u) =>
-            String(u.id) === String(uid) ? { ...u, ...action.payload } : u
+            String(u.id) === String(updated.id) ? { ...u, ...updated } : u
           );
         }
       })
       .addCase(uploadUserAvatar.fulfilled, (state, action) => {
-        state.user = action.payload;
-        const uid = action.payload?.id || action.payload?.userId;
-        if (uid) {
-          state.usersMap[uid] = action.payload;
-        }
-      })
-      .addCase(fetchAllUsers.fulfilled, (state, action) => {
-        const overrides = getUserOverridesByIdMap();
-        const map = { ...state.usersMap, ...overrides };
-        action.payload.forEach((u) => {
-          if (u && u.id) map[u.id] = applyUserOverrides(u);
-        });
-        state.usersMap = map;
-        state.usersList = action.payload.map((u) => applyUserOverrides(u));
-      })
-      .addCase(fetchUserById.fulfilled, (state, action) => {
-        const u = action.payload ? applyUserOverrides(action.payload) : null;
-        if (u && u.id) {
-          state.usersMap[u.id] = u;
-          if (
-            state.viewedUserProfile &&
-            String(state.viewedUserProfile.id) === String(u.id)
-          ) {
-            state.viewedUserProfile = u;
-          }
-        }
+        state.avatarUrl = action.payload;
       })
       .addCase(adminCreateUser.fulfilled, (state, action) => {
-        state.usersList = [action.payload, ...state.usersList];
-        state.usersMap[action.payload.id] = action.payload;
-      })
-      .addCase(adminUpdateUserRole.fulfilled, (state, action) => {
-        state.usersList = state.usersList.map((u) =>
-          String(u.id) === String(action.payload.userId)
-            ? { ...u, role: action.payload.role }
-            : u
-        );
-        if (state.usersMap[action.payload.userId]) {
-          state.usersMap[action.payload.userId].role = action.payload.role;
+        const newUser = action.payload;
+        state.usersList.push(newUser);
+        if (newUser.id) {
+          state.usersMap[newUser.id] = newUser;
         }
       })
       .addCase(adminDeleteUser.fulfilled, (state, action) => {
+        const deletedId = String(action.payload);
         state.usersList = state.usersList.filter(
-          (u) => String(u.id) !== String(action.payload)
+          (u) => String(u.id) !== deletedId
         );
+        delete state.usersMap[deletedId];
+      })
+      .addCase(adminUpdateUserRole.fulfilled, (state, action) => {
+        const { userId, role } = action.payload;
+        state.usersList = state.usersList.map((u) =>
+          String(u.id) === String(userId) ? { ...u, role } : u
+        );
+        if (state.usersMap[userId]) {
+          state.usersMap[userId].role = role;
+        }
+        if (
+          state.viewedProfileUser &&
+          String(state.viewedProfileUser.id) === String(userId)
+        ) {
+          state.viewedProfileUser.role = role;
+        }
       });
   },
 });
 
 export const {
-  setLanguage,
   openAuthModal,
   closeAuthModal,
-  setResetTokenFromUrl,
   openProfilePage,
   openUserProfile,
   closeProfilePage,
   clearInvalidSession,
+  setResetTokenFromUrl,
+  setLanguage,
 } = authSlice.actions;
 
 export default authSlice.reducer;

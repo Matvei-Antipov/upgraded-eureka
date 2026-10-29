@@ -27,7 +27,7 @@
 
 .ask-btn {
   background-color: #111827;
-  color: #ffffff;
+  color: #ffffff !important;
   border: 1px solid #111827;
   padding: 10px 18px;
   border-radius: 8px;
@@ -73,6 +73,9 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -84,6 +87,30 @@
   color: #111827;
   font-weight: 600;
   border-bottom-color: #111827;
+}
+
+/* Светящаяся цифра на вкладке Збережені */
+.saved-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  transition: all 0.25s ease;
+}
+
+.saved-tab-badge.has-items {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff !important;
+  border-color: #f97316;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.55);
 }
 
 .feed-filters {
@@ -213,7 +240,7 @@
 .retry-btn {
   margin-top: 12px;
   background-color: #111827;
-  color: #ffffff;
+  color: #ffffff !important;
   border: none;
   padding: 8px 14px;
   border-radius: 6px;
@@ -284,7 +311,7 @@
   overflow: hidden;
 }
 
-/* Теги категорий (без оранжевого цвета — чистый минималистичный стиль) */
+/* Теги категорий */
 .post-categories {
   display: flex;
   flex-wrap: wrap;
@@ -547,20 +574,28 @@
   align-items: center;
   gap: 5px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: #6b7280;
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .bookmark-btn:hover,
 .share-btn:hover,
-.bookmark-btn.active,
 .share-btn.active {
   color: #111827;
   background-color: #f3f4f6;
+}
+
+.bookmark-btn.saved-glow {
+  background-color: #fff7ed;
+  color: #ea580c;
+  border-color: #fdba74;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.22);
 }
 
 .share-wrapper {

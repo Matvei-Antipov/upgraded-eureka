@@ -71,6 +71,7 @@ const PostFeed = () => {
 
   const t = translations[language] || translations.uk;
   const isAdmin = user?.role === 'admin';
+  const savedCount = Object.keys(savedPosts || {}).length;
 
   const [activeSharePostId, setActiveSharePostId] = useState(null);
   const [activeReactionPickerPostId, setActiveReactionPickerPostId] =
@@ -96,7 +97,6 @@ const PostFeed = () => {
     posts.forEach((post) => {
       const aid = post.author_id || post.user_id;
       if (aid && !usersMap[aid] && !requestedUserIdsRef.current.has(aid)) {
-        requestedUserIdsRef.current.has(aid);
         requestedUserIdsRef.current.add(aid);
         dispatch(fetchUserById(aid));
       }
@@ -525,9 +525,7 @@ const PostFeed = () => {
           </div>
           <div className="stat-card">
             <span className="stat-label">{t.statSaved}</span>
-            <span className="stat-value">
-              {Object.keys(savedPosts || {}).length}
-            </span>
+            <span className="stat-value">{savedCount}</span>
           </div>
         </div>
       </section>
@@ -721,10 +719,19 @@ const PostFeed = () => {
           </button>
           <button
             type="button"
-            className={`tab ${viewMode === 'saved' ? 'active' : ''}`}
+            className={`tab tab-saved-btn ${
+              viewMode === 'saved' ? 'active' : ''
+            }`}
             onClick={() => dispatch(setViewMode('saved'))}
           >
-            {t.tabSaved} ({Object.keys(savedPosts || {}).length})
+            <span>{t.tabSaved}</span>
+            <span
+              className={`saved-tab-badge ${
+                savedCount > 0 ? 'has-items' : ''
+              }`}
+            >
+              {savedCount}
+            </span>
           </button>
         </div>
 
@@ -757,7 +764,9 @@ const PostFeed = () => {
               className="filter-select"
             >
               <option value="date">{t.sortByDate}</option>
-              <option value="likes">{t.sortByLikesOption || t.tabPopular}</option>
+              <option value="likes">
+                {t.sortByLikesOption || t.tabPopular}
+              </option>
             </select>
           </label>
 
@@ -1153,7 +1162,7 @@ const PostFeed = () => {
 
                     <button
                       type="button"
-                      className={`bookmark-btn ${isSaved ? 'active' : ''}`}
+                      className={`bookmark-btn ${isSaved ? 'active saved-glow' : ''}`}
                       onClick={() => handleToggleBookmark(post)}
                     >
                       <span>🔖</span>

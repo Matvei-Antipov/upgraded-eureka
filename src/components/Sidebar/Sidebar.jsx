@@ -14,11 +14,13 @@ import './Sidebar.css';
 
 const Sidebar = () => {
   const dispatch = useDispatch();
-  const { categories, categoryId, viewMode, sortBy } = useSelector(
+  const { categories, categoryId, viewMode, sortBy, savedPosts } = useSelector(
     (state) => state.posts
   );
   const { language } = useSelector((state) => state.auth);
   const t = translations[language] || translations.uk;
+
+  const savedCount = Object.keys(savedPosts || {}).length;
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -106,6 +108,13 @@ const Sidebar = () => {
             >
               <span className="sidebar-icon">🔖</span>
               <span className="sidebar-text">{t.navSaved}</span>
+              <span
+                className={`saved-count-badge ${
+                  savedCount > 0 ? 'has-items' : ''
+                }`}
+              >
+                {savedCount}
+              </span>
             </button>
           </li>
           <li>

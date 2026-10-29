@@ -1,5 +1,6 @@
 export const translations = {
   uk: {
+    brandTitle: 'розбір',
     brandSubtitle: 'спільнота розробників',
     searchPlaceholder: 'Пошук питань за заголовком або вмістом...',
     clearSearch: 'Очистити пошук',
@@ -122,6 +123,28 @@ export const translations = {
     answerEmptyError: 'Будь ласка, введіть текст відповіді перед відправкою.',
     answerShortError: 'Відповідь занадто коротка (мінімум 5 символів).',
 
+    /* AskQuestionModal ключі (включно з усіма можливими аліасами) */
+    askModalTitle: 'Поставити нове питання',
+    editModalTitle: 'Редагувати питання',
+    askQuestionModalTitle: 'Поставити нове питання',
+    editQuestionModalTitle: 'Редагувати питання',
+    questionTitleLabel: 'Заголовок питання',
+    questionTitlePlaceholder:
+      'Наприклад: Як правильно налаштувати індекси в PostgreSQL?',
+    questionContentLabel: 'Детальний опис проблеми або код',
+    questionBodyLabel: 'Детальний опис проблеми або код',
+    questionContentPlaceholder:
+      'Опишіть контекст, що ви вже спробували та який результат очікуєте...',
+    questionBodyPlaceholder:
+      'Опишіть контекст, що ви вже спробували та який результат очікуєте...',
+    selectCategoriesLabel: 'Категорії (теми питання)',
+    categoriesLabel: 'Категорії (теми питання)',
+    publishBtn: 'Опублікувати питання',
+    publishQuestionBtn: 'Опублікувати питання',
+    savingBtn: 'Збереження...',
+    titleTooShortError: 'Заголовок має містити щонайменше 5 символів.',
+    contentTooShortError: 'Опис питання має містити щонайменше 10 символів.',
+
     newCommentAlertTitle: '💬 Новий коментар до вашого питання!',
     commentedOnYourPost: 'залишив коментар під вашим постом',
     viewCommentBtn: 'Переглянути →',
@@ -141,12 +164,12 @@ export const translations = {
     myQuestionsTitle: 'Мої питання',
     userQuestionsTitle: 'Питання користувача',
 
-    /* Модальне вікно входу та реєстрації (AuthModal) */
+    /* AuthModal */
     authLoginTitle: 'Вхід в акаунт',
     authRegisterTitle: 'Створення акаунту',
     authResetTitle: 'Відновлення пароля',
     loginOrEmailLabel: 'Логін або Email',
-    loginInputPlaceholder: 'Введіть ваш логін...',
+    loginInputPlaceholder: 'Введіть ваш логін або email...',
     fullNamePlaceholder: "Ваше ім'я та прізвище...",
     emailLabel: 'Електронна пошта (Email)',
     emailPlaceholder: 'you@example.com',
@@ -173,8 +196,9 @@ export const translations = {
     registerSuccessToast: 'Акаунт успішно створено! Ласкаво просимо!',
     resetLinkSentToast: 'Токен відновлення надіслано!',
     passwordChangedToast: 'Пароль успішно змінено!',
-    loginFailedError: 'Невірний логін або пароль.',
-    registerFailedError: 'Помилка реєстрації. Можливо, логін або email вже зайнятий.',
+    loginFailedError: 'Невірний логін, email або пароль.',
+    registerFailedError:
+      'Помилка реєстрації. Можливо, логін або email вже зайнятий.',
     resetRequestFailedError: 'Не вдалося надіслати запит відновлення.',
     resetConfirmFailedError: 'Невірний токен або помилка зміни пароля.',
 
@@ -199,6 +223,7 @@ export const translations = {
   },
 
   en: {
+    brandTitle: 'rozbir',
     brandSubtitle: 'developer community',
     searchPlaceholder: 'Search questions by title or content...',
     clearSearch: 'Clear search',
@@ -320,6 +345,28 @@ export const translations = {
     answerEmptyError: 'Please enter your answer before submitting.',
     answerShortError: 'Answer is too short (minimum 5 characters).',
 
+    /* AskQuestionModal keys */
+    askModalTitle: 'Ask a New Question',
+    editModalTitle: 'Edit Question',
+    askQuestionModalTitle: 'Ask a New Question',
+    editQuestionModalTitle: 'Edit Question',
+    questionTitleLabel: 'Question Title',
+    questionTitlePlaceholder:
+      'E.g., How to properly configure indexes in PostgreSQL?',
+    questionContentLabel: 'Detailed Problem Description or Code',
+    questionBodyLabel: 'Detailed Problem Description or Code',
+    questionContentPlaceholder:
+      'Describe the context, what you have tried, and the expected output...',
+    questionBodyPlaceholder:
+      'Describe the context, what you have tried, and the expected output...',
+    selectCategoriesLabel: 'Categories (Question Topics)',
+    categoriesLabel: 'Categories (Question Topics)',
+    publishBtn: 'Publish Question',
+    publishQuestionBtn: 'Publish Question',
+    savingBtn: 'Saving...',
+    titleTooShortError: 'Title must be at least 5 characters long.',
+    contentTooShortError: 'Description must be at least 10 characters long.',
+
     newCommentAlertTitle: '💬 New comment on your question!',
     commentedOnYourPost: 'commented on your post',
     viewCommentBtn: 'View →',
@@ -344,7 +391,7 @@ export const translations = {
     authRegisterTitle: 'Create Account',
     authResetTitle: 'Reset Password',
     loginOrEmailLabel: 'Login or Email',
-    loginInputPlaceholder: 'Enter your login...',
+    loginInputPlaceholder: 'Enter your login or email...',
     fullNamePlaceholder: 'Your full name...',
     emailLabel: 'Email Address',
     emailPlaceholder: 'you@example.com',
@@ -370,8 +417,9 @@ export const translations = {
     registerSuccessToast: 'Account created! Welcome!',
     resetLinkSentToast: 'Reset token sent!',
     passwordChangedToast: 'Password changed successfully!',
-    loginFailedError: 'Invalid login or password.',
-    registerFailedError: 'Registration failed. Login or email may already be in use.',
+    loginFailedError: 'Invalid login, email, or password.',
+    registerFailedError:
+      'Registration failed. Login or email may already be in use.',
     resetRequestFailedError: 'Failed to send reset request.',
     resetConfirmFailedError: 'Invalid token or error changing password.',
 

@@ -72,6 +72,16 @@ textarea {
   color: #111827;
 }
 
+/* Гарантия белого текста на всех тёмных акцентных кнопках сайта */
+.ask-btn,
+.modal-submit-btn,
+.ask-submit-btn,
+.auth-submit-btn,
+.register-btn,
+.comment-alert-action {
+  color: #ffffff !important;
+}
+
 a {
   color: inherit;
   text-decoration: none;

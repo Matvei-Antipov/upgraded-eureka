@@ -53,7 +53,7 @@ const Header = () => {
         >
           <div className="brand-logo-box">{'</>'}</div>
           <div className="brand-text">
-            <span className="brand-title">розбір</span>
+            <span className="brand-title">{t.brandTitle || 'розбір'}</span>
             <span className="brand-subtitle">{t.brandSubtitle}</span>
           </div>
         </div>

@@ -66,6 +66,47 @@
 
 .sidebar-text {
   color: inherit;
+  flex: 1;
+}
+
+/* Светящаяся цифра количества сохранённых вопросов */
+.saved-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  transition: all 0.25s ease;
+}
+
+.saved-count-badge.has-items {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff !important;
+  border-color: #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.55),
+    0 2px 6px rgba(234, 88, 12, 0.35);
+  animation: savedBadgeGlow 2s infinite ease-in-out;
+}
+
+@keyframes savedBadgeGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.45),
+      0 2px 5px rgba(234, 88, 12, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.8),
+      0 2px 8px rgba(234, 88, 12, 0.5);
+    transform: scale(1.06);
+  }
 }
 
 .sidebar-item:hover {
