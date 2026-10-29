@@ -82,6 +82,7 @@ const PostFeed = () => {
   const shareMenuRef = useRef(null);
   const reactionMenuRef = useRef(null);
   const requestedUserIdsRef = useRef(new Set());
+  const requestedPreviewIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (!isAdmin && statusFilter !== 'active') {
@@ -94,32 +95,29 @@ const PostFeed = () => {
   }, [dispatch]);
 
   useEffect(() => {
+    dispatch(fetchPosts(false));
+  }, [dispatch, statusFilter]);
+
+  // Запрашиваем превью комментариев и категорий строго 1 раз для каждого поста (без бесконечного цикла)
+  useEffect(() => {
+    posts.forEach((post) => {
+      if (post?.id && !requestedPreviewIdsRef.current.has(post.id)) {
+        requestedPreviewIdsRef.current.add(post.id);
+        dispatch(fetchPostPreviewComments(post.id));
+      }
+    });
+  }, [dispatch, posts]);
+
+  // Запрашиваем авторов строго 1 раз для каждого ID
+  useEffect(() => {
     posts.forEach((post) => {
       const aid = post.author_id || post.user_id;
-      if (aid && !usersMap[aid] && !requestedUserIdsRef.current.has(aid)) {
+      if (aid && !requestedUserIdsRef.current.has(aid)) {
         requestedUserIdsRef.current.add(aid);
         dispatch(fetchUserById(aid));
       }
-      const previewComments = previewCommentsByPost[post.id];
-      if (Array.isArray(previewComments)) {
-        previewComments.forEach((c) => {
-          const cAid = c.author_id || c.user_id;
-          if (
-            cAid &&
-            !usersMap[cAid] &&
-            !requestedUserIdsRef.current.has(cAid)
-          ) {
-            requestedUserIdsRef.current.add(cAid);
-            dispatch(fetchUserById(cAid));
-          }
-        });
-      }
     });
-  }, [dispatch, posts, previewCommentsByPost, usersMap]);
-
-  useEffect(() => {
-    dispatch(fetchPosts(false));
-  }, [dispatch, statusFilter]);
+  }, [dispatch, posts]);
 
   useEffect(() => {
     setCustomPageInput(String(page));
@@ -130,18 +128,6 @@ const PostFeed = () => {
       setInfiniteVisibleCount(3);
     }
   }, [paginationMode, categoryId, viewMode, sortBy, order]);
-
-  useEffect(() => {
-    posts.forEach((post) => {
-      if (
-        post.id &&
-        (previewCommentsByPost[post.id] === undefined ||
-          previewCategoriesByPost[post.id] === undefined)
-      ) {
-        dispatch(fetchPostPreviewComments(post.id));
-      }
-    });
-  }, [dispatch, posts, previewCommentsByPost, previewCategoriesByPost]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

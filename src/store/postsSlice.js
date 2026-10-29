@@ -291,7 +291,6 @@ export const fetchPostDetails = createAsyncThunk(
     const currentUserId = user?.id || user?.userId;
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-    // Проверяем сначала локально созданные вопросы (например, от Гостя)
     const localPosts = loadFromStorage('usof_local_posts', []);
     const localFound =
       localPosts.find((p) => String(p.id) === String(postId)) ||
@@ -659,10 +658,7 @@ export const createNewPost = createAsyncThunk(
 
 export const updateExistingPost = createAsyncThunk(
   'posts/updateExistingPost',
-  async (
-    { postId, title, content, status, categories },
-    { getState }
-  ) => {
+  async ({ postId, title, content, status, categories }, { getState }) => {
     const { token } = getState().auth;
     const {
       currentPost,
@@ -1188,7 +1184,7 @@ const postsSlice = createSlice({
       };
 
       const isSelected = existing.userSelected.includes(reactionId);
-      const currentCount = existing.counts[commentId] || 0;
+      const currentCount = existing.counts[reactionId] || 0;
 
       const updatedCounts = {
         ...existing.counts,
@@ -1262,7 +1258,11 @@ const postsSlice = createSlice({
         const seenIds = new Set();
         const uniqueRaw = [];
         combinedRaw.forEach((p) => {
-          if (p && !deletedPosts.includes(String(p.id)) && !seenIds.has(String(p.id))) {
+          if (
+            p &&
+            !deletedPosts.includes(String(p.id)) &&
+            !seenIds.has(String(p.id))
+          ) {
             seenIds.add(String(p.id));
             uniqueRaw.push(applyPostState(p, state.categoryOverrides));
           }
@@ -1340,11 +1340,14 @@ const postsSlice = createSlice({
           action.payload;
         state.previewCommentsByPost[postId] = comments;
 
+        // Всегда устанавливаем массив (даже пустой), чтобы никогда не возникал бесконечный цикл
         if (state.categoryOverrides[postId]) {
           state.previewCategoriesByPost[postId] =
             state.categoryOverrides[postId];
-        } else if (Array.isArray(categories) && categories.length > 0) {
-          state.previewCategoriesByPost[postId] = categories;
+        } else {
+          state.previewCategoriesByPost[postId] = Array.isArray(categories)
+            ? categories
+            : [];
         }
 
         if (likesScore !== null && likesScore !== undefined) {
