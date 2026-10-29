@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 880" width="1280" height="880" font-family="Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <defs>
+    <!-- Синхронне повідомлення (закрита зафарбована стрілка) -->
+    <marker id="sync-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 1 2 L 11 6 L 1 10 Z" fill="#111827" stroke="#111827" stroke-width="1"/>
+    </marker>
+    <!-- Відповідь / Return Message (відкрита стрілка для пунктиру) -->
+    <marker id="return-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 1 2 L 11 6 L 1 10" fill="none" stroke="#111827" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Фон -->
+  <rect x="0" y="0" width="1280" height="880" fill="#ffffff"/>
+
+  <!-- Рамка sd (Sequence Diagram Frame) -->
+  <rect x="20" y="20" width="1240" height="805" fill="none" stroke="#111827" stroke-width="1.8"/>
+  <polygon points="20,20 265,20 265,36 251,50 20,50" fill="#f3f4f6" stroke="#111827" stroke-width="1.6"/>
+  <text x="32" y="40" font-size="13" font-weight="700" fill="#111827">sd create_post_and_hydrate</text>
+
+  <!-- ==================== УЧАСНИКИ (ACTOR & OBJECTS) ==================== -->
+  <!-- 1. Актор (Stickman) x=90 -->
+  <g transform="translate(90, 66)">
+    <circle cx="0" cy="0" r="10" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <line x1="0" y1="10" x2="0" y2="32" stroke="#111827" stroke-width="1.8"/>
+    <line x1="-14" y1="18" x2="14" y2="18" stroke="#111827" stroke-width="1.8"/>
+    <line x1="0" y1="32" x2="-11" y2="50" stroke="#111827" stroke-width="1.8"/>
+    <line x1="0" y1="32" x2="11" y2="50" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="65" font-size="12" font-weight="700" text-anchor="middle" fill="#111827">User</text>
+  </g>
+
+  <!-- 2. :AskQuestionModal x=265 -->
+  <g transform="translate(185, 75)">
+    <rect x="0" y="0" width="160" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="80" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«React Component»</text>
+    <text x="80" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:AskQuestionModal</text>
+  </g>
+
+  <!-- 3. :postsSlice x=465 -->
+  <g transform="translate(385, 75)">
+    <rect x="0" y="0" width="160" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="80" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«Redux Thunk»</text>
+    <text x="80" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:postsSlice</text>
+  </g>
+
+  <!-- 4. :authMiddleware x=665 -->
+  <g transform="translate(585, 75)">
+    <rect x="0" y="0" width="160" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="80" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«Express Middleware»</text>
+    <text x="80" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:authMiddleware</text>
+  </g>
+
+  <!-- 5. :PostController x=865 -->
+  <g transform="translate(785, 75)">
+    <rect x="0" y="0" width="160" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="80" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«Express Controller»</text>
+    <text x="80" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:PostController</text>
+  </g>
+
+  <!-- 6. :PostModel x=1045 -->
+  <g transform="translate(970, 75)">
+    <rect x="0" y="0" width="150" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="75" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«Data Model»</text>
+    <text x="75" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:PostModel</text>
+  </g>
+
+  <!-- 7. :Database x=1195 -->
+  <g transform="translate(1135, 75)">
+    <rect x="0" y="0" width="110" height="44" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="55" y="20" font-size="11" text-anchor="middle" fill="#4b5563">«MySQL 8»</text>
+    <text x="55" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#111827">:Database</text>
+  </g>
+
+  <!-- ==================== ЛІНІЇ ЖИТТЯ (LIFELINES) ==================== -->
+  <line x1="90" y1="136" x2="90" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="265" y1="119" x2="265" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="465" y1="119" x2="465" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="665" y1="119" x2="665" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="865" y1="119" x2="865" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="1045" y1="119" x2="1045" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+  <line x1="1190" y1="119" x2="1190" y2="800" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="6,5"/>
+
+  <!-- ==================== СМУГИ АКТИВНОСТІ (ACTIVATION BARS) ==================== -->
+  <!-- :AskQuestionModal -->
+  <rect x="259" y="155" width="12" height="615" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :postsSlice -->
+  <rect x="459" y="235" width="12" height="505" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :authMiddleware -->
+  <rect x="659" y="275" width="12" height="55" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :PostController (POST /api/posts) -->
+  <rect x="859" y="445" width="12" height="175" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :PostModel -->
+  <rect x="1039" y="470" width="12" height="120" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :Database (INSERT post) -->
+  <rect x="1184" y="490" width="12" height="36" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :Database (INSERT post_categories) -->
+  <rect x="1184" y="542" width="12" height="36" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <!-- :PostController (GET /api/posts/:id) -->
+  <rect x="859" y="645" width="12" height="70" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <rect x="1184" y="662" width="12" height="34" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+
+  <!-- ==================== ПОВІДОМЛЕННЯ (MESSAGES) ==================== -->
+  <!-- 1. User -> :AskQuestionModal: submitForm(title, content, categories) -->
+  <line x1="90" y1="160" x2="257" y2="160" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="174" y="152" font-size="11.5" text-anchor="middle" fill="#111827">submitForm(title, content, cats)</text>
+
+  <!-- 2. Self-message on :AskQuestionModal: validateFields() -->
+  <polyline points="271,176 315,176 315,204 273,204" fill="none" stroke="#111827" stroke-width="1.5" marker-end="url(#sync-arrow)"/>
+  <text x="322" y="194" font-size="11.5" fill="#111827">validateFields()</text>
+
+  <!-- 3. :AskQuestionModal -> :postsSlice: dispatch(createNewPost(payload)) -->
+  <line x1="271" y1="240" x2="457" y2="240" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="364" y="232" font-size="11.5" text-anchor="middle" fill="#111827">createNewPost(payload)</text>
+
+  <!-- 4. :postsSlice -> :authMiddleware: POST /api/posts (Bearer JWT) -->
+  <line x1="471" y1="280" x2="657" y2="280" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="564" y="272" font-size="11.5" text-anchor="middle" fill="#111827">verifyToken(Bearer JWT)</text>
+
+  <!-- return validation result -->
+  <line x1="659" y1="322" x2="473" y2="322" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="564" y="315" font-size="11" text-anchor="middle" fill="#374151">decoded user (author_id, role)</text>
+
+  <!-- ==================== BREAK FRAGMENT (ЯК НА РИС. 7 PDF) ==================== -->
+  <rect x="70" y="342" width="625" height="84" fill="none" stroke="#111827" stroke-width="1.6"/>
+  <polygon points="70,342 135,342 135,356 125,364 70,364" fill="#f3f4f6" stroke="#111827" stroke-width="1.4"/>
+  <text x="82" y="357" font-size="11.5" font-weight="700" fill="#111827">break</text>
+  <text x="565" y="358" font-size="11.5" font-weight="700" font-style="italic" text-anchor="middle" fill="#111827">[!token || tokenExpired]</text>
+
+  <polyline points="471,372 512,372 512,395 473,395" fill="none" stroke="#111827" stroke-width="1.5" marker-end="url(#sync-arrow)"/>
+  <text x="518" y="388" font-size="11" fill="#111827">rejectWithValue(401)</text>
+
+  <line x1="459" y1="408" x2="273" y2="408" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="364" y="401" font-size="11" text-anchor="middle" fill="#374151">openAuthModal('login')</text>
+
+  <line x1="259" y1="415" x2="92" y2="415" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="174" y="408" font-size="11" text-anchor="middle" fill="#374151">inform user (toast)</text>
+
+  <!-- ==================== ОСНОВНИЙ ПОТІК СТВОРЕННЯ ПОСТА ==================== -->
+  <!-- 5. :postsSlice -> :PostController: createPost(req, res) -->
+  <line x1="471" y1="450" x2="857" y2="450" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="664" y="442" font-size="11.5" text-anchor="middle" fill="#111827">POST /api/posts (title, content, categories)</text>
+
+  <!-- 6. :PostController -> :PostModel: Post.create(author_id, title, content, categories) -->
+  <line x1="871" y1="475" x2="1037" y2="475" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="954" y="467" font-size="11.5" text-anchor="middle" fill="#111827">Post.create(...)</text>
+
+  <!-- 7. :PostModel -> :Database: INSERT INTO posts -->
+  <line x1="1051" y1="495" x2="1182" y2="495" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="1117" y="488" font-size="11" text-anchor="middle" fill="#111827">INSERT INTO posts</text>
+
+  <line x1="1184" y1="522" x2="1053" y2="522" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="1117" y="516" font-size="10.5" text-anchor="middle" fill="#374151">insertId (postId)</text>
+
+  <!-- 8. :PostModel -> :Database: INSERT INTO post_categories -->
+  <line x1="1051" y1="548" x2="1182" y2="548" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="1117" y="541" font-size="10.5" text-anchor="middle" fill="#111827">INSERT post_categories</text>
+
+  <line x1="1184" y1="574" x2="1053" y2="574" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="1117" y="568" font-size="10.5" text-anchor="middle" fill="#374151">affectedRows</text>
+
+  <!-- Return postId to PostController -->
+  <line x1="1039" y1="588" x2="873" y2="588" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="954" y="581" font-size="11" text-anchor="middle" fill="#374151">postId</text>
+
+  <!-- Return 201 Created to postsSlice -->
+  <line x1="859" y1="612" x2="473" y2="612" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="664" y="605" font-size="11" text-anchor="middle" fill="#374151">201 Created { postId }</text>
+
+  <!-- 9. :postsSlice -> :PostController: GET /api/posts/:postId -->
+  <line x1="471" y1="650" x2="857" y2="650" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="664" y="642" font-size="11.5" text-anchor="middle" fill="#111827">GET /api/posts/:postId</text>
+
+  <line x1="871" y1="666" x2="1182" y2="666" stroke="#111827" stroke-width="1.6" marker-end="url(#sync-arrow)"/>
+  <text x="1026" y="659" font-size="11" text-anchor="middle" fill="#111827">SELECT * FROM posts WHERE id = ?</text>
+
+  <line x1="1184" y1="692" x2="873" y2="692" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="1026" y="686" font-size="10.5" text-anchor="middle" fill="#374151">post record</text>
+
+  <line x1="859" y1="710" x2="473" y2="710" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="664" y="703" font-size="11" text-anchor="middle" fill="#374151">200 OK (serverPost JSON)</text>
+
+  <!-- Return to AskQuestionModal & User -->
+  <line x1="459" y1="736" x2="273" y2="736" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="364" y="729" font-size="11" text-anchor="middle" fill="#374151">fulfilled { createdPost }</text>
+
+  <line x1="259" y1="762" x2="92" y2="762" stroke="#111827" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#return-arrow)"/>
+  <text x="174" y="755" font-size="11" text-anchor="middle" fill="#374151">closeAskModal() &amp; render post</text>
+
+  <!-- Підпис рисунка -->
+  <text x="640" y="858" font-size="15" font-weight="700" text-anchor="middle" fill="#111827">
+    Рисунок 5 — Діаграма послідовності дій (Sequence Diagram) створення публікації
+  </text>
+</svg>

@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 880" width="1220" height="880" font-family="Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <defs>
+    <!-- Стрілка для асоціації та include/extend (відкрита UML-стрілка) -->
+    <marker id="open-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 1 2 L 11 6 L 1 10" fill="none" stroke="#1f2937" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <!-- Порожній трикутник для UML Generalization (узагальнення акторів) -->
+    <marker id="hollow-triangle" viewBox="0 0 16 16" refX="15" refY="8" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 1 2 L 15 8 L 1 14 Z" fill="#ffffff" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Фон діаграми -->
+  <rect x="0" y="0" width="1220" height="880" fill="#ffffff"/>
+
+  <!-- Системна межа (System Boundary) -->
+  <rect x="250" y="36" width="940" height="780" fill="#fafafa" stroke="#111827" stroke-width="2"/>
+  <text x="266" y="64" font-size="15" font-weight="700" fill="#111827">Веб-система запитань та відповідей USOF (rozbir)</text>
+
+  <!-- ==================== АКТОРИ (СТІКМЕНИ) ==================== -->
+  <!-- Актор 1: Гість -->
+  <g transform="translate(115, 130)">
+    <circle cx="0" cy="0" r="14" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="14" x2="0" y2="52" stroke="#111827" stroke-width="2"/>
+    <line x1="-22" y1="26" x2="22" y2="26" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="-18" y2="82" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="18" y2="82" stroke="#111827" stroke-width="2"/>
+    <text x="0" y="102" font-size="13" font-weight="700" text-anchor="middle" fill="#111827">Гість</text>
+    <text x="0" y="118" font-size="11.5" text-anchor="middle" fill="#4b5563">(Неавторизований)</text>
+  </g>
+
+  <!-- Зв'язок Generalization: Авторизований користувач -> Гість -->
+  <line x1="115" y1="392" x2="115" y2="258" stroke="#111827" stroke-width="1.8" marker-end="url(#hollow-triangle)"/>
+
+  <!-- Актор 2: Авторизований користувач -->
+  <g transform="translate(115, 415)">
+    <circle cx="0" cy="0" r="14" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="14" x2="0" y2="52" stroke="#111827" stroke-width="2"/>
+    <line x1="-22" y1="26" x2="22" y2="26" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="-18" y2="82" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="18" y2="82" stroke="#111827" stroke-width="2"/>
+    <text x="0" y="102" font-size="13" font-weight="700" text-anchor="middle" fill="#111827">Авторизований</text>
+    <text x="0" y="118" font-size="13" font-weight="700" text-anchor="middle" fill="#111827">користувач</text>
+  </g>
+
+  <!-- Зв'язок Generalization: Адміністратор -> Авторизований користувач -->
+  <line x1="115" y1="655" x2="115" y2="544" stroke="#111827" stroke-width="1.8" marker-end="url(#hollow-triangle)"/>
+
+  <!-- Актор 3: Адміністратор -->
+  <g transform="translate(115, 678)">
+    <circle cx="0" cy="0" r="14" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="14" x2="0" y2="52" stroke="#111827" stroke-width="2"/>
+    <line x1="-22" y1="26" x2="22" y2="26" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="-18" y2="82" stroke="#111827" stroke-width="2"/>
+    <line x1="0" y1="52" x2="18" y2="82" stroke="#111827" stroke-width="2"/>
+    <text x="0" y="102" font-size="13" font-weight="700" text-anchor="middle" fill="#111827">Адміністратор</text>
+  </g>
+
+  <!-- UML Note щодо узагальнення акторів -->
+  <g transform="translate(18, 286)">
+    <path d="M 0 0 L 188 0 L 202 14 L 202 74 L 0 74 Z" fill="#fffbeb" stroke="#4b5563" stroke-width="1.3"/>
+    <path d="M 188 0 L 188 14 L 202 14" fill="none" stroke="#4b5563" stroke-width="1.3"/>
+    <text x="10" y="21" font-size="11" fill="#1f2937">Кожен дочірній актор</text>
+    <text x="10" y="36" font-size="11" fill="#1f2937">успадковує всі варіанти</text>
+    <text x="10" y="51" font-size="11" fill="#1f2937">використання батьківського</text>
+    <text x="10" y="66" font-size="11" fill="#1f2937">актора (Generalization)</text>
+  </g>
+  <line x1="115" y1="325" x2="20" y2="325" stroke="#6b7280" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- ==================== БАЗОВІ ВАРІАНТИ ВИКОРИСТАННЯ (ОВАЛИ) ==================== -->
+  <!-- 1. Переглянути стрічку питань -->
+  <g transform="translate(480, 112)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#111827">Переглянути стрічку питань</text>
+  </g>
+
+  <!-- 2. Переглянути сторінку питання та коментарі -->
+  <g transform="translate(480, 182)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Переглянути сторінку питання</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та дерево коментарів</text>
+  </g>
+
+  <!-- 3. Зареєструватися або увійти в акаунт -->
+  <g transform="translate(480, 252)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#111827">Зареєструватися / Авторизуватися</text>
+  </g>
+
+  <!-- 4. Відновити пароль за Email -->
+  <g transform="translate(480, 322)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#111827">Відновити пароль через Email</text>
+  </g>
+
+  <!-- 5. Опублікувати нове питання -->
+  <g transform="translate(480, 404)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#111827">Опублікувати нове питання</text>
+  </g>
+
+  <!-- 6. Редагувати або видалити власне питання -->
+  <g transform="translate(480, 474)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Редагувати або видалити</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">власне питання</text>
+  </g>
+
+  <!-- 7. Залишити коментар під питанням -->
+  <g transform="translate(480, 544)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#111827">Залишити коментар під питанням</text>
+  </g>
+
+  <!-- 8. Оцінити питання або коментар -->
+  <g transform="translate(480, 614)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Оцінити публікацію або коментар</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">(лайк / дизлайк)</text>
+  </g>
+
+  <!-- 9. Редагувати профіль та аватар -->
+  <g transform="translate(480, 684)">
+    <ellipse cx="0" cy="0" rx="150" ry="27" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Редагувати дані профілю</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та завантажити аватар</text>
+  </g>
+
+  <!-- 10. Адміністрування (категорії, користувачі, модерація) -->
+  <g transform="translate(480, 758)">
+    <ellipse cx="0" cy="0" rx="150" ry="28" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Керувати категоріями</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та обліковими записами</text>
+  </g>
+
+  <!-- ==================== РОЗШИРЮЮЧІ ТА ВКЛЮЧЕНІ ВАРІАНТИ (ПРАВА КОЛОНКА) ==================== -->
+  <!-- E1: Фільтрувати за категоріями та датою (extend -> 1) -->
+  <g transform="translate(975, 92)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Фільтрувати за категорією</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та інтервалом дат</text>
+  </g>
+
+  <!-- E2: Сортувати та шукати (extend -> 1) -->
+  <g transform="translate(975, 162)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Сортувати за лайками/датою</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та шукати за ключовими словами</text>
+  </g>
+
+  <!-- I1: Перевірити облікові дані та видати JWT (include <- 3) -->
+  <g transform="translate(975, 252)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Перевірити облікові дані</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">та згенерувати JWT-токен</text>
+  </g>
+
+  <!-- I2: Надіслати токен відновлення (include <- 4) -->
+  <g transform="translate(975, 322)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Надіслати лист із токеном</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">підтвердження (SMTP)</text>
+  </g>
+
+  <!-- I3: Обрати категорії питання (include <- 5) -->
+  <g transform="translate(975, 398)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Обрати принаймні одну</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">категорію питання</text>
+  </g>
+
+  <!-- E3: Додати блок коду або зображення (extend -> 5) -->
+  <g transform="translate(975, 468)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Прикріпити зображення</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">або форматований блок коду</text>
+  </g>
+
+  <!-- E4: Відповісти на коментар (extend -> 7) -->
+  <g transform="translate(975, 544)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Відповісти на інший коментар</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">(вкладена гілка обговорення)</text>
+  </g>
+
+  <!-- I4: Оновити рейтинг автора (include <- 8) -->
+  <g transform="translate(975, 614)">
+    <ellipse cx="0" cy="0" rx="165" ry="26" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Автоматично перерахувати</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">рейтинг автора публікації</text>
+  </g>
+
+  <!-- E5: Змінити статус публікації або коментаря (extend -> 10) -->
+  <g transform="translate(975, 758)">
+    <ellipse cx="0" cy="0" rx="165" ry="28" fill="#ffffff" stroke="#111827" stroke-width="1.6"/>
+    <text x="0" y="-2" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">Змінити статус питання чи</text>
+    <text x="0" y="14" font-size="12" font-weight="600" text-anchor="middle" fill="#111827">коментаря (active / inactive)</text>
+  </g>
+
+  <!-- ==================== ЗВ'ЯЗКИ ASSOCIATION (СУЦІЛЬНІ СТРІЛКИ) ==================== -->
+  <!-- Від Гостя -->
+  <line x1="150" y1="150" x2="328" y2="112" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="162" x2="328" y2="180" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="176" x2="328" y2="248" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="190" x2="328" y2="316" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+
+  <!-- Від Авторизованого користувача -->
+  <line x1="150" y1="435" x2="328" y2="404" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="448" x2="328" y2="472" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="460" x2="328" y2="542" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="472" x2="328" y2="610" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+  <line x1="150" y1="485" x2="328" y2="680" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+
+  <!-- Від Адміністратора -->
+  <line x1="150" y1="715" x2="328" y2="756" stroke="#1f2937" stroke-width="1.5" marker-end="url(#open-arrow)"/>
+
+  <!-- ==================== ЗВ'ЯЗКИ «INCLUDE» ТА «EXTEND» (ПУНКТИРНІ СТРІЛКИ) ==================== -->
+  <!-- E1 -> 1 (extend: від розширюючого до базового) -->
+  <line x1="810" y1="95" x2="632" y2="106" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="722" y="92" font-size="11.5" text-anchor="middle" fill="#111827">«extend»</text>
+
+  <!-- E2 -> 1 (extend: від розширюючого до базового) -->
+  <line x1="810" y1="158" x2="632" y2="120" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="722" y="153" font-size="11.5" text-anchor="middle" fill="#111827">«extend»</text>
+
+  <!-- 3 -> I1 (include: від базового до включеного) -->
+  <line x1="630" y1="252" x2="808" y2="252" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="244" font-size="11.5" text-anchor="middle" fill="#111827">«include»</text>
+
+  <!-- 4 -> I2 (include: від базового до включеного) -->
+  <line x1="630" y1="322" x2="808" y2="322" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="314" font-size="11.5" text-anchor="middle" fill="#111827">«include»</text>
+
+  <!-- 5 -> I3 (include: від базового до включеного) -->
+  <line x1="630" y1="400" x2="808" y2="398" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="391" font-size="11.5" text-anchor="middle" fill="#111827">«include»</text>
+
+  <!-- E3 -> 5 (extend: від розширюючого до базового) -->
+  <line x1="810" y1="464" x2="628" y2="414" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="722" y="454" font-size="11.5" text-anchor="middle" fill="#111827">«extend»</text>
+
+  <!-- E4 -> 7 (extend: від розширюючого до базового) -->
+  <line x1="810" y1="544" x2="632" y2="544" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="536" font-size="11.5" text-anchor="middle" fill="#111827">«extend»</text>
+
+  <!-- 8 -> I4 (include: від базового до включеного) -->
+  <line x1="630" y1="614" x2="808" y2="614" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="606" font-size="11.5" text-anchor="middle" fill="#111827">«include»</text>
+
+  <!-- E5 -> 10 (extend: від розширюючого до базового) -->
+  <line x1="810" y1="758" x2="632" y2="758" stroke="#1f2937" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#open-arrow)"/>
+  <text x="720" y="750" font-size="11.5" text-anchor="middle" fill="#111827">«extend»</text>
+
+  <!-- Підпис рисунка -->
+  <text x="610" y="852" font-size="15" font-weight="700" text-anchor="middle" fill="#111827">
+    Рисунок 1 — Діаграма варіантів використання (Use–Case Diagram) платформи USOF
+  </text>
+</svg>
