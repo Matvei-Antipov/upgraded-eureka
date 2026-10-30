@@ -18,7 +18,8 @@ api/.env
 api/.env.local
 !api/.env.example
 
-api/uploads/
+api/uploads/*
+!api/uploads/.gitkeep
 
 .DS_Store
 */.DS_Store
