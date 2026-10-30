@@ -373,10 +373,6 @@ const PostFeed = () => {
               <span className="stat-label">{t.statSaved}</span>
             </div>
           </div>
-
-          <p className="feed-subtitle" style={{ marginTop: '14px' }}>
-            {t.statsLocalNote}
-          </p>
         </div>
       </section>
     );

@@ -94,8 +94,6 @@ export const translations = {
     statCategories: 'Активних категорій (тем)',
     statReactions: 'Поставлено реакцій та оцінок',
     statSaved: 'Збережено у закладки',
-    statsLocalNote:
-      'Відвідування, перегляди та швидкі емодзі-реакції рахуються локально у вашому браузері. Кількість питань і категорій завантажується з API.',
 
     generalTopic: 'Без категорії',
     justNow: 'щойно',
@@ -384,8 +382,6 @@ export const translations = {
     statCategories: 'Active categories (topics)',
     statReactions: 'Community reactions',
     statSaved: 'Bookmarked questions',
-    statsLocalNote:
-      'Site visits, page views, and quick emoji reactions are tracked locally in your browser. Questions and categories are loaded from the API.',
 
     generalTopic: 'Uncategorized',
     justNow: 'just now',
