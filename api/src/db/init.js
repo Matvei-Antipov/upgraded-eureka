@@ -1,5 +1,6 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
+const seedDatabase = require('./seed');
 
 async function initDB() {
     const connection = await mysql.createConnection({
@@ -43,7 +44,7 @@ async function initDB() {
                 title VARCHAR(255) NOT NULL,
                 publish_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status ENUM('active', 'inactive') DEFAULT 'active',
-                content TEXT NOT NULL,
+                content MEDIUMTEXT NOT NULL,
                 FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
             );
         `);
@@ -66,7 +67,7 @@ async function initDB() {
                 author_id INT NOT NULL,
                 post_id INT NOT NULL,
                 publish_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                content TEXT NOT NULL,
+                content MEDIUMTEXT NOT NULL,
                 status ENUM('active', 'inactive') DEFAULT 'active',
                 FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
@@ -92,6 +93,19 @@ async function initDB() {
             );
         `);
         console.log('[Database] [INFO] Table `likes` is ready');
+
+        try {
+            await connection.query(`ALTER TABLE posts MODIFY COLUMN content MEDIUMTEXT NOT NULL;`);
+            await connection.query(`ALTER TABLE comments MODIFY COLUMN content MEDIUMTEXT NOT NULL;`);
+        } catch (alterErr) {
+            // column definition is already up to date
+        }
+
+        const [userCountRows] = await connection.query(`SELECT COUNT(*) AS count FROM users;`);
+        if (userCountRows[0].count === 0) {
+            console.log('[Database] [INFO] Database is empty. Seeding initial test data...');
+            await seedDatabase(connection);
+        }
 
     } catch (error) {
         console.error(`[Database] [ERROR] Error initializing database: ${error.message}`);

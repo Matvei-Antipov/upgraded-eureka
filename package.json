@@ -16,7 +16,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "NODE_OPTIONS='--no-deprecation' react-scripts start",
+    "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -39,5 +39,5 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://127.0.0.1:5000"
+  "proxy": "http://127.0.0.1:3000"
 }

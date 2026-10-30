@@ -62,24 +62,48 @@ To run the project locally you need:
    SMTP_PASSWORD=your_mailtrap_password
    ```
 3. **Start the backend server:**
-   Tables are created automatically on startup (`http://localhost:3000`).
+   Tables and test data (at least 5 entries per each table) are created automatically on startup (`http://localhost:3000`).
    ```bash
    npm run dev
    ```
+
 4. **Start the frontend (`usof-frontend/`):**
    Open a second terminal in the project root:
    ```bash
    npm install
-   PORT=3001 npm start
+   npm start
    ```
-   Open `http://localhost:3001` in the browser. Requests to `/api` and `/uploads` are proxied to `http://localhost:3000`.
+   Open `http://localhost:3001` in the browser. The frontend port `3001` is preconfigured in `.env` for cross-platform compatibility across Windows (PowerShell / Command Prompt), macOS, and Linux. Requests to `/api` and `/uploads` are automatically proxied to `http://localhost:3000`.
+
+### Database initialization and test data
+To fulfill the requirement of having at least five entries per each table, the project provides three flexible options:
+1. **Automatic Seeding on Startup:** On the first launch of the backend (`npm run dev`), `initDB()` creates the database schema and automatically populates test entries across all tables if the `users` table is empty.
+2. **Dedicated CLI Seed Script:** Run the seed command inside the `api/` directory at any time:
+   ```bash
+   cd api
+   npm run seed
+   ```
+3. **Standalone SQL File:** A portable SQL dump file `db_seed.sql` (and `api/db_seed.sql`) is included for direct import via MySQL CLI or GUI tools (Workbench, HeidiSQL, phpMyAdmin):
+   ```bash
+   mysql -u root -p test_db < db_seed.sql
+   ```
+
+**Pre-configured Demo Accounts (all passwords: `password123`):**
+| Role | Username | Password | Email | Rating |
+|---|---|---|---|---|
+| **Admin** | `admin` | `password123` | `admin@usof.dev` | 120 |
+| **User** | `alex_kovalenko` | `password123` | `alex@usof.dev` | 45 |
+| **User** | `olena_m` | `password123` | `olena@usof.dev` | 38 |
+| **User** | `dmytro_dev` | `password123` | `dmytro@usof.dev` | 22 |
+| **User** | `maria_k` | `password123` | `maria@usof.dev` | 15 |
+| **User** | `ivan_ts` | `password123` | `ivan@usof.dev` | 8 |
 
 ## Non-functional requirements
 
 1. **Performance**
    * API response time for standard requests (`GET /api/posts`, `POST /api/posts`, `POST /api/posts/:id/like`) stays under 200 ms under normal load and under 1.5 s with up to 500 concurrent users.
    * Initial page load takes less than 2.5 s on a 10 Mbps connection.
-   * Avatar uploads are limited to 5 MB, and inline question images are compressed on the client to 480 px width.
+   * Avatar uploads and inline question images are limited to 2.5 MB.
    * *Verification:* Chrome DevTools (Network and Lighthouse tabs) and Postman response timings.
 
 2. **Security**

@@ -52,10 +52,23 @@ Follow these steps from cloning the repository to the first launch of the progra
    SMTP_PASSWORD=your_mailtrap_password
    ```
 4. **Run the program:**
-   The database schema and required tables will be initialized automatically upon startup.
+   The database schema, required tables, and initial test data (at least 5 entries per each table) will be initialized automatically upon startup.
    ```bash
    npm run dev
    ```
+
+5. **Test data and seeding options:**
+   * **Automatic Seed:** If the database is empty, initial test records are populated automatically on startup.
+   * **Manual Seed Script:** Run `npm run seed` inside `api/` at any time to populate or refresh test data.
+   * **SQL File:** You can also import `db_seed.sql` directly using MySQL CLI or any GUI client (e.g. `mysql -u root -p test_db < db_seed.sql`).
+
+   **Default test credentials (all accounts use password `password123`):**
+   * **Administrator:** `admin` / `password123` (`admin@usof.dev`)
+   * **User 1:** `alex_kovalenko` / `password123` (`alex@usof.dev`)
+   * **User 2:** `olena_m` / `password123` (`olena@usof.dev`)
+   * **User 3:** `dmytro_dev` / `password123` (`dmytro@usof.dev`)
+   * **User 4:** `maria_k` / `password123` (`maria@usof.dev`)
+   * **User 5:** `ivan_ts` / `password123` (`ivan@usof.dev`)
 
 ## Full-fledged documentation
 

@@ -153,7 +153,7 @@ export const translations = {
     contentTooShortError: 'Опис питання має містити щонайменше 10 символів.',
     selectAtLeastOneCategoryError: 'Оберіть щонайменше одну категорію для питання.',
     imageTooLargeError:
-      'Зображення занадто велике для збереження в базі даних (максимум ~30 КБ у стисненому вигляді). Спробуйте менший скріншот або вставте посилання URL.',
+      'Зображення занадто велике (максимум 2.5 МБ). Будь ласка, оберіть файл до 2.5 МБ або вставте посилання URL.',
     imageProcessError: 'Не вдалося обробити зображення.',
 
     newCommentAlertTitle: 'Нова відповідь на ваше питання!',
@@ -233,7 +233,7 @@ export const translations = {
     profileSavedToast: 'Профіль успішно оновлено!',
     avatarUpdatedToast: 'Фото профілю успішно оновлено!',
     avatarInvalidTypeError: 'Оберіть файл зображення (PNG, JPG, WEBP або GIF).',
-    avatarTooBigError: 'Розмір файлу аватара не повинен перевищувати 5 МБ.',
+    avatarTooBigError: 'Розмір файлу аватара не повинен перевищувати 2.5 МБ.',
     postCreatedToast: 'Питання успішно опубліковано!',
     postUpdatedToast: 'Питання успішно оновлено!',
     postDeletedToast: 'Питання успішно видалено!',
@@ -443,7 +443,7 @@ export const translations = {
     contentTooShortError: 'Description must be at least 10 characters long.',
     selectAtLeastOneCategoryError: 'Please select at least one category.',
     imageTooLargeError:
-      'Image is too large for database storage (max ~30 KB compressed). Please use a smaller screenshot or insert an image URL.',
+      'Image is too large (maximum 2.5 MB). Please select a file under 2.5 MB or insert an image URL.',
     imageProcessError: 'Failed to process image.',
 
     newCommentAlertTitle: 'New comment on your question!',
@@ -523,7 +523,7 @@ export const translations = {
     profileSavedToast: 'Profile updated successfully!',
     avatarUpdatedToast: 'Profile photo updated!',
     avatarInvalidTypeError: 'Please select an image file (PNG, JPG, WEBP, or GIF).',
-    avatarTooBigError: 'Avatar file size must not exceed 5 MB.',
+    avatarTooBigError: 'Avatar file size must not exceed 2.5 MB.',
     postCreatedToast: 'Question published successfully!',
     postUpdatedToast: 'Question updated successfully!',
     postDeletedToast: 'Question deleted!',

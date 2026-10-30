@@ -12,7 +12,7 @@ import './AskQuestionModal.css';
 
 const DRAFT_STORAGE_KEY = 'usof_question_draft_v1';
 
-const compressImageFileToDataUrl = (file, maxWidth = 480, quality = 0.58) =>
+const compressImageFileToDataUrl = (file, maxWidth = 1200, quality = 0.8) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -185,6 +185,11 @@ const AskQuestionModal = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setLocalError('');
+    if (file.size > 2.5 * 1024 * 1024) {
+      setLocalError(t.imageTooLargeError);
+      e.target.value = '';
+      return;
+    }
     try {
       const dataUrl = await compressImageFileToDataUrl(file);
       if (dataUrl.length > MAX_INLINE_IMAGE_CHARS) {
