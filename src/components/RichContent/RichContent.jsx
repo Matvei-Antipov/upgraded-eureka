@@ -118,7 +118,7 @@ const RichContent = ({ text, compact = false, language = 'uk' }) => {
           const codeLines = seg.content.split('\n');
           const previewCode =
             compact && codeLines.length > 6
-              ? `${codeLines.slice(0, 6).join('\n')}\n// ...`
+              ? `${codeLines.slice(0, 6).join('\n')}\n...`
               : seg.content;
           return (
             <div

@@ -177,7 +177,7 @@ const AskQuestionModal = () => {
   };
 
   const handleInsertCodeBlock = () => {
-    const snippet = `\n\`\`\`javascript\n// Code\nconsole.log('Hello USOF');\n\`\`\`\n`;
+    const snippet = `\n\`\`\`javascript\nconsole.log('Hello USOF');\n\`\`\`\n`;
     setContent((prev) => `${prev}${snippet}`);
   };
 

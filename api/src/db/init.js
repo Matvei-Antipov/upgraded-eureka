@@ -98,7 +98,6 @@ async function initDB() {
             await connection.query(`ALTER TABLE posts MODIFY COLUMN content MEDIUMTEXT NOT NULL;`);
             await connection.query(`ALTER TABLE comments MODIFY COLUMN content MEDIUMTEXT NOT NULL;`);
         } catch (alterErr) {
-            // column definition is already up to date
         }
 
         const [userCountRows] = await connection.query(`SELECT COUNT(*) AS count FROM users;`);

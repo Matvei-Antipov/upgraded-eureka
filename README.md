@@ -43,7 +43,6 @@ To run the project locally you need:
 1. **Clone the repository:**
    ```bash
    git clone ssh://git@git.green-lms.app:22022/challenge-665/mantipov-12264.git
-   cd usof-frontend
    ```
 2. **Set up the backend (`./api`):**
    ```bash

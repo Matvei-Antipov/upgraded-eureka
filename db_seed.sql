@@ -1,10 +1,6 @@
--- USOF Database Schema and Seed Data
--- Database: test_db
-
 CREATE DATABASE IF NOT EXISTS `test_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `test_db`;
 
--- 1. Table: users
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     login VARCHAR(255) UNIQUE NOT NULL,
@@ -16,14 +12,12 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('admin', 'user') DEFAULT 'user'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Table: categories
 CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Table: posts
 CREATE TABLE IF NOT EXISTS posts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     author_id INT NOT NULL,
@@ -34,7 +28,6 @@ CREATE TABLE IF NOT EXISTS posts (
     FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. Table: post_categories
 CREATE TABLE IF NOT EXISTS post_categories (
     post_id INT NOT NULL,
     category_id INT NOT NULL,
@@ -43,7 +36,6 @@ CREATE TABLE IF NOT EXISTS post_categories (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. Table: comments
 CREATE TABLE IF NOT EXISTS comments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     author_id INT NOT NULL,
@@ -55,7 +47,6 @@ CREATE TABLE IF NOT EXISTS comments (
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. Table: likes
 CREATE TABLE IF NOT EXISTS likes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     author_id INT NOT NULL,
@@ -72,7 +63,6 @@ CREATE TABLE IF NOT EXISTS likes (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Seed: users (password for all test accounts: password123)
 INSERT INTO users (id, login, password, full_name, email, profile_picture, rating, role) VALUES
 (1, 'admin', '$2b$10$rTY0hm9ixDz2sBvKef8X6ufGeueUA33drmJEhHP4VgumGIaUg.Ut6', 'System Administrator', 'admin@usof.dev', 'default-avatar.png', 120, 'admin'),
 (2, 'alex_kovalenko', '$2b$10$rTY0hm9ixDz2sBvKef8X6ufGeueUA33drmJEhHP4VgumGIaUg.Ut6', 'Alex Kovalenko', 'alex@usof.dev', 'default-avatar.png', 45, 'user'),
@@ -82,7 +72,6 @@ INSERT INTO users (id, login, password, full_name, email, profile_picture, ratin
 (6, 'ivan_ts', '$2b$10$rTY0hm9ixDz2sBvKef8X6ufGeueUA33drmJEhHP4VgumGIaUg.Ut6', 'Ivan Tsybulskyi', 'ivan@usof.dev', 'default-avatar.png', 8, 'user')
 ON DUPLICATE KEY UPDATE login=VALUES(login);
 
--- Seed: categories
 INSERT INTO categories (id, title, description) VALUES
 (1, 'JavaScript', 'Core JavaScript syntax, asynchronous programming, event loop and ES6+ features.'),
 (2, 'React', 'React library, component lifecycle, hooks, state management and performance.'),
@@ -92,7 +81,6 @@ INSERT INTO categories (id, title, description) VALUES
 (6, 'CSS & UI/UX', 'Responsive design, Flexbox, CSS Grid, animations and modern web interfaces.')
 ON DUPLICATE KEY UPDATE title=VALUES(title);
 
--- Seed: posts
 INSERT INTO posts (id, author_id, title, publish_date, status, content) VALUES
 (1, 2, 'How to handle race conditions in React useEffect?', '2026-10-25 10:15:00', 'active', 'When fetching data in a component based on props (like user ID or query string), multiple requests might return in an unexpected order.\n\nFor example:\n```javascript\nuseEffect(() => {\n  let isSubscribed = true;\n  fetchUserData(userId).then(data => {\n    if (isSubscribed) setUser(data);\n  });\n  return () => { isSubscribed = false; };\n}, [userId]);\n```\nIs this cleanup flag still recommended in React 19, or should we prefer AbortController?'),
 (2, 3, 'Optimizing MySQL queries with composite indexes', '2026-10-26 14:30:00', 'active', 'I have a posts table with author_id, status, and publish_date columns. Queries frequently filter by status and author, then sort by publish_date DESC:\n\n```sql\nSELECT * FROM posts \nWHERE status = \'active\' AND author_id = 42 \nORDER BY publish_date DESC LIMIT 10;\n```\nWhat is the best order of columns in a composite index for this query to avoid filesort?'),
@@ -102,7 +90,6 @@ INSERT INTO posts (id, author_id, title, publish_date, status, content) VALUES
 (6, 2, '[Archived] Legacy webpack configuration migration checklist', '2026-10-29 08:10:00', 'inactive', 'This discussion is archived. Summary of steps to migrate from custom webpack 4 configs to modern tooling.')
 ON DUPLICATE KEY UPDATE title=VALUES(title);
 
--- Seed: post_categories
 INSERT IGNORE INTO post_categories (post_id, category_id) VALUES
 (1, 1),
 (1, 2),
@@ -113,7 +100,6 @@ INSERT IGNORE INTO post_categories (post_id, category_id) VALUES
 (5, 3),
 (6, 1);
 
--- Seed: comments
 INSERT INTO comments (id, author_id, post_id, publish_date, content, status) VALUES
 (1, 3, 1, '2026-10-25 11:00:00', 'AbortController is definitely cleaner because it actually cancels the network request:\n```javascript\nconst controller = new AbortController();\nfetch(url, { signal: controller.signal });\nreturn () => controller.abort();\n```\nThis also saves client bandwidth.', 'active'),
 (2, 2, 1, '2026-10-25 11:20:00', '[reply:1]\nThanks Olena! Just need to make sure to catch AbortError so it does not log unhandled errors in console.', 'active'),
@@ -125,7 +111,6 @@ INSERT INTO comments (id, author_id, post_id, publish_date, content, status) VAL
 (8, 5, 5, '2026-10-28 19:35:00', '[reply:7]\nAlso check for unclosed event listeners or timers retaining closures.', 'active')
 ON DUPLICATE KEY UPDATE content=VALUES(content);
 
--- Seed: likes
 INSERT INTO likes (id, author_id, post_id, comment_id, type) VALUES
 (1, 1, 1, NULL, 'like'),
 (2, 3, 1, NULL, 'like'),

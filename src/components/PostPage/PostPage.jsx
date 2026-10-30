@@ -913,7 +913,7 @@ const PostPage = () => {
                 className="bookmark-btn"
                 onClick={() =>
                   setNewCommentText(
-                    (prev) => `${prev}\n\`\`\`javascript\n// Code\n\`\`\`\n`
+                    (prev) => `${prev}\n\`\`\`javascript\nconsole.log('example');\n\`\`\`\n`
                   )
                 }
               >
