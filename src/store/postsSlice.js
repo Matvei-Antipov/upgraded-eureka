@@ -529,7 +529,7 @@ export const createNewPost = createAsyncThunk(
 
 export const updateExistingPost = createAsyncThunk(
   'posts/updateExistingPost',
-  async ({ postId, title, content, status }, { getState, rejectWithValue }) => {
+  async ({ postId, title, content, status, categories }, { getState, rejectWithValue }) => {
     const { token } = getState().auth;
     if (!token) {
       return rejectWithValue(toApiError(null, 'authRequiredToast'));
@@ -539,10 +539,17 @@ export const updateExistingPost = createAsyncThunk(
     if (title !== undefined) payload.title = title;
     if (content !== undefined) payload.content = content;
     if (status !== undefined) payload.status = status;
+    if (categories !== undefined) payload.categories = categories;
 
     try {
       await api.patch(`/posts/${postId}`, payload);
-      return { postId, ...payload };
+      const allCategories = getState().posts.categories || [];
+      const categoryObjects = Array.isArray(categories)
+        ? categories
+            .map((id) => allCategories.find((c) => Number(c.id) === Number(id)) || { id: Number(id) })
+        : undefined;
+
+      return { postId, ...payload, categoryObjects };
     } catch (error) {
       return rejectWithValue(toApiError(error, 'actionFailedError'));
     }
@@ -1301,7 +1308,7 @@ const postsSlice = createSlice({
         );
       })
       .addCase(updateExistingPost.fulfilled, (state, action) => {
-        const { postId, title, content, status } = action.payload;
+        const { postId, title, content, status, categoryObjects } = action.payload;
 
         const updateItem = (item) => {
           if (String(item.id) !== String(postId)) return item;
@@ -1310,16 +1317,24 @@ const postsSlice = createSlice({
             title: title ?? item.title,
             content: content ?? item.content,
             status: status ?? item.status,
+            categories: categoryObjects ?? item.categories,
           };
         };
 
         state.items = state.items.map(updateItem);
+
+        if (categoryObjects) {
+          state.previewCategoriesByPost[postId] = categoryObjects;
+        }
 
         if (
           state.currentPost &&
           String(state.currentPost.id) === String(postId)
         ) {
           state.currentPost = updateItem(state.currentPost);
+          if (categoryObjects) {
+            state.currentPostCategories = categoryObjects;
+          }
         }
 
         state.isAskModalOpen = false;

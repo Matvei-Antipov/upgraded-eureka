@@ -937,7 +937,7 @@ const ProfilePage = () => {
 
                   {(isOwnProfile || isAdmin) && (
                     <div className="profile-post-actions">
-                      {isOwnProfile && (
+                      {(isOwnProfile || isAdmin) && (
                         <button
                           type="button"
                           className="admin-action-btn"

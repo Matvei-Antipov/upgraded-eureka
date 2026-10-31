@@ -74,10 +74,10 @@ class PostController {
                 return res.status(403).json({ error: 'Forbidden' });
             }
 
-            const { title, content, status } = req.body;
+            const { title, content, status, categories } = req.body;
             const updateData = {};
 
-            if (isAuthor) {
+            if (isAuthor || isAdmin) {
                 if (title) updateData.title = title;
                 if (content) updateData.content = content;
             }
@@ -89,6 +89,10 @@ class PostController {
             if (Object.keys(updateData).length > 0) {
                 await Post.update(postId, updateData);
                 console.log(`[Post] [INFO] Post ID: ${postId} updated by User ID: ${req.user.userId}`);
+            }
+
+            if (Array.isArray(categories) && (isAuthor || isAdmin)) {
+                await Post.updateCategories(postId, categories);
             }
 
             res.status(200).json({ message: 'Post updated successfully' });

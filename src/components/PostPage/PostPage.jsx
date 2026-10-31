@@ -628,7 +628,7 @@ const PostPage = () => {
         </button>
 
         <div className="post-owner-controls">
-          {isPostOwner && (
+          {(isPostOwner || isAdmin) && (
             <button
               type="button"
               className="bookmark-btn"

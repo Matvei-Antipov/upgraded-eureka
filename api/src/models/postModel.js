@@ -53,9 +53,9 @@ class Post {
             queryParams.push(endDate);
         }
 
-        let orderByClause = 'ORDER BY likes_count DESC';
+        const sortOrder = order && order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+        let orderByClause = `ORDER BY likes_count ${sortOrder}`;
         if (sortBy === 'date') {
-            const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
             orderByClause = `ORDER BY p.publish_date ${sortOrder}`;
         }
 
@@ -116,6 +116,27 @@ class Post {
             [postId]
         );
         return rows;
+    }
+
+    static async updateCategories(postId, categories) {
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.query(`DELETE FROM post_categories WHERE post_id = ?`, [postId]);
+            if (Array.isArray(categories) && categories.length > 0) {
+                const categoryValues = categories.map(categoryId => [postId, Number(categoryId)]);
+                await connection.query(
+                    `INSERT INTO post_categories (post_id, category_id) VALUES ?`,
+                    [categoryValues]
+                );
+            }
+            await connection.commit();
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
     }
 }
 

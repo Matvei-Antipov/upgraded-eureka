@@ -249,7 +249,7 @@ const AskQuestionModal = () => {
       return;
     }
 
-    if (!editingPost && selectedCategoryIds.length === 0) {
+    if (selectedCategoryIds.length === 0) {
       setLocalError(t.selectAtLeastOneCategoryError);
       return;
     }
@@ -262,6 +262,7 @@ const AskQuestionModal = () => {
             postId: editingPost.id,
             title: cleanTitle,
             content: cleanContent,
+            categories: selectedCategoryIds,
           })
         ).unwrap();
       } else {
@@ -441,9 +442,7 @@ const AskQuestionModal = () => {
 
             <div className="modal-categories-section">
               <span className="modal-label">
-                {editingPost
-                  ? t.categoriesReadonlyHint
-                  : t.selectCategoriesLabel}
+                {t.selectCategoriesLabel}
               </span>
               <div className="modal-categories-list">
                 {categories.map((cat) => {
@@ -454,7 +453,6 @@ const AskQuestionModal = () => {
                     <button
                       key={cat.id}
                       type="button"
-                      disabled={Boolean(editingPost)}
                       className={`category-pill-btn ${
                         isChecked ? 'checked' : ''
                       }`}
