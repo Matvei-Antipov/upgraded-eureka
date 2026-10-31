@@ -4,6 +4,8 @@
   flex-direction: column;
   background-color: #ffffff;
   color: #111827;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .main-container {
@@ -15,11 +17,13 @@
   display: flex;
   align-items: flex-start;
   gap: 32px;
+  min-width: 0;
 }
 
 .main-content-area {
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 .toast-container {
@@ -163,5 +167,26 @@
     flex-direction: column;
     padding: 20px 16px;
     gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-container {
+    padding: 16px 12px;
+    gap: 16px;
+  }
+
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: calc(100% - 24px);
+  }
+
+  .comment-alert-container {
+    left: 12px;
+    right: 12px;
+    bottom: 70px;
+    max-width: calc(100% - 24px);
   }
 }

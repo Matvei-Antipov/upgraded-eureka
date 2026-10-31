@@ -170,3 +170,19 @@
     min-width: 240px;
   }
 }
+
+@media (max-width: 520px) {
+  .sidebar {
+    gap: 12px;
+  }
+
+  .sidebar-block {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .sidebar-item {
+    font-size: 14px;
+    padding: 9px 12px;
+  }
+}

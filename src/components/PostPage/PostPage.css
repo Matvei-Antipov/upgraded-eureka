@@ -28,6 +28,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .post-full-title {
@@ -35,6 +37,8 @@
   font-size: 22px;
   font-weight: 800;
   color: #111827;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .comments-header-bar {
@@ -213,7 +217,7 @@
 @media (max-width: 768px) {
   .post-full-card,
   .comments-section-card {
-    padding: 16px;
+    padding: 16px 12px;
   }
 
   .post-full-title {
@@ -221,8 +225,8 @@
   }
 
   .comment-thread-node.nested-reply {
-    margin-left: 14px;
-    padding-left: 10px;
+    margin-left: 12px;
+    padding-left: 8px;
   }
 
   .comments-header-bar,
@@ -230,5 +234,27 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .post-full-card,
+  .comments-section-card {
+    padding: 14px 10px;
+  }
+
+  .post-page-top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .post-owner-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .comment-thread-node.nested-reply {
+    margin-left: 6px;
+    padding-left: 6px;
   }
 }

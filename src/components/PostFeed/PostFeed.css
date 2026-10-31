@@ -665,8 +665,17 @@
     flex: 1;
   }
 
+  .feed-dates-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .feed-dates-row .date-input {
+    width: 100%;
+  }
+
   .post-item {
-    padding: 14px;
+    padding: 14px 12px;
   }
 
   .post-meta {
@@ -678,6 +687,7 @@
   .post-actions-bar {
     width: 100%;
     flex-wrap: wrap;
+    gap: 10px;
   }
 
   .pagination-footer,
@@ -691,5 +701,42 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .stats-page-card {
+    padding: 16px 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .feed-controls-bar {
+    padding: 10px;
+  }
+
+  .feed-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .post-title {
+    font-size: 16px;
+    word-break: break-word;
+  }
+
+  .post-preview-text {
+    word-break: break-word;
+  }
+
+  .share-popover {
+    left: 0;
+    right: auto;
+    min-width: 150px;
   }
 }

@@ -639,6 +639,15 @@
 }
 
 @media (max-width: 768px) {
+  .profile-page-container {
+    padding-bottom: 24px;
+  }
+
+  .profile-main-card,
+  .profile-card {
+    padding: 16px 12px;
+  }
+
   .profile-main-card {
     grid-template-columns: 1fr;
   }
@@ -649,9 +658,43 @@
     grid-template-columns: 1fr;
   }
 
+  .admin-users-search-wrap {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .admin-role-filter-pills {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
   .admin-user-row,
   .profile-post-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .admin-user-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-tabs-nav {
+    flex-wrap: wrap;
+  }
+
+  .profile-tab-btn {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .profile-stat-box {
+    padding: 10px;
   }
 }
