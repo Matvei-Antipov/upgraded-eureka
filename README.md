@@ -48,8 +48,9 @@ To run the project locally you need:
    ```bash
    cd api
    npm install
+   cp .env.example .env
    ```
-   Create a `.env` file inside `api/`:
+   Configure database and mail credentials inside `api/.env`:
    ```env
    PORT=3000
    DB_HOST=localhost
@@ -69,10 +70,11 @@ To run the project locally you need:
 4. **Start the frontend (`usof-frontend/`):**
    Open a second terminal in the project root:
    ```bash
+   cp .env.example .env
    npm install
    npm start
    ```
-   Open `http://localhost:3001` in the browser. The frontend port `3001` is preconfigured in `.env` for cross-platform compatibility across Windows (PowerShell / Command Prompt), macOS, and Linux. Requests to `/api` and `/uploads` are automatically proxied to `http://localhost:3000`.
+   Open `http://localhost:3001` in the browser. Setting `PORT=3001` in `.env` (copied from `.env.example`) provides cross-platform compatibility across Windows (PowerShell / Command Prompt), macOS, and Linux without port conflict with the backend. Requests to `/api` and `/uploads` are automatically proxied to `http://localhost:3000`.
 
 ### Database initialization and test data
 To fulfill the requirement of having at least five entries per each table, the project provides three flexible options:
